@@ -1,0 +1,19 @@
+These files implement a HSA Agent to work with rocm-gdb
+
+The libAMDHSADebugAgent-x64.so is built and injected into the running application by the ROCR runtime.
+The location and filename for HSADebugAgent.so is passed using HSA_TOOLS_LIB environment variable.
+
+Build the agent library with HwDbg DBE.
+
+Once you have compiled the agent library, dont forget to add the DBE path your LD_LIBRARY_PATH 
+since it is a dynamic library
+
+
+The Agent can only be used when the application is run within rocm-gdb
+The rocmConfigure in the gdbinit file sets the appropriate environment variables
+
+GDBInit:
+The contents of the gdbinit file located within the Agent directory should be appended to the .gdbinit to your home directory
+Once you start gdb, you should run: rocmconfigure.
+
+The command rocmconfigure can be added within the init file to always set up gdb for rocm.
