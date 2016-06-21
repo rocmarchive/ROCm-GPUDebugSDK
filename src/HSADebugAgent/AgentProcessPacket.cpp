@@ -19,6 +19,8 @@
 #include "AgentLogging.h"
 #include "AgentProcessPacket.h"
 #include "CommunicationControl.h"
+#include "CommandLoop.h"
+#include "HSADebugAgent.h"
 
 // Add DBE (Version decided by Makefile)
 #include "AMDGPUDebug.h"
@@ -506,6 +508,11 @@ void AgentProcessPacket(HwDbgAgent::AgentContext* pActiveContext,
         case HSAIL_COMMAND_SET_LOGGING:
             AgentLogSetFromConsole(packet.m_loggingInfo);
             break;
+
+        case HSAIL_COMMAND_SET_HSABP:
+	    HwDbgAgent::SetHsaDebugBreakpoint(true);
+	    RestoreSIGUSR2();
+	    break;
 
         case HSAIL_COMMAND_UNKNOWN:
             pActiveContext->PrintDBEVersion();

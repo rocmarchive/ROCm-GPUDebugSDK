@@ -35,6 +35,8 @@ namespace HwDbgAgent
 
 static pthread_t DebugEventHandler ;
 
+static bool use_hsa_breakpoint = false;
+
 /// Check if the fifo is empty.
 /// \todo The problem with this function is that there is a side effect
 /// of the data actually getting read, a better way may be to poll the fifo.
@@ -303,6 +305,29 @@ static HsailParentStatus CheckParentStatus(const AgentContext* pActiveContext)
     return parentStatus;
 }
 
+/* GDB will install a breakpoint on this function that will be used when
+ * a GPU kernel breakpoint is hit.
+ * It is defined as extern C to facilitate the name lookup by GDB. This
+ * could be changed to use exported symbol referring to locations
+ * as it is done in the in-process agent library. 
+ */
+extern "C" {
+    void __attribute__((optimize("O0"))) TriggerStop(void)
+    {
+	return;
+    }
+}
+
+void SetHsaDebugBreakpoint(bool value)
+{
+    use_hsa_breakpoint = value;
+}
+
+bool GetHsaDebugBreakpoint(void)
+{
+    return use_hsa_breakpoint;
+}
+
 /// The DebugEvent loop is run as a separate thread.
 /// It is launched from the predispatch callback.
 /// The predispatch callback will have created a breakpoint, so we can
@@ -396,17 +421,24 @@ void* DebugEventThread(void* pArgs)
                 // It is the same old notion of multithreaded signalling where
                 // using a kill can result in a signal that be delivered
                 // to any thread in a process
-                if (pthread_kill(pthread_self(), SIGUSR2) == -1)
-                {
-                    // Get out of the thread,
-                    // I am not sure on how to handle signaling failure
-                    AGENT_ERROR("Could not signal gdb");
-                    exitSignal = 1;
-                }
-                else
-                {
-                    AGENT_LOG("DebugEventThread: Raise SIGUSR2 to stop");
-                }
+        	if(!use_hsa_breakpoint)
+        	{
+        	    if (pthread_kill(pthread_self(), SIGUSR2) == -1)
+        	    {
+        		// Get out of the thread,
+        		// I am not sure on how to handle signaling failure
+        		AGENT_ERROR("Could not signal gdb");
+        		exitSignal = 1;
+        	    }
+        	    else
+        	    {
+        		AGENT_LOG("DebugEventThread: Raise SIGUSR2 to stop");
+        	    }
+        	}
+        	else
+        	{
+        	    TriggerStop();
+        	}
             }
             else
             {

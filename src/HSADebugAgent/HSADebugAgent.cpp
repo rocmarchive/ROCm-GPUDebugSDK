@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <unistd.h>
+#include <string.h>
 
 // HSA headers
 #include <hsa_api_trace.h>
@@ -90,6 +91,14 @@ static HwDbgAgent::AgentISABufferManager* psActiveISABufferManager = nullptr;
 static HwDbgAgent::AgentConfiguration* psActiveAgentConfig = nullptr;
 
 static void InitAgentContext();
+
+static struct sigaction old_sigusr2, new_sigusr2;
+
+/* Restore the default handling for SIGUSR2 */
+void RestoreSIGUSR2()
+{
+    sigaction(SIGUSR2, &old_sigusr2, NULL);
+}
 
 // This signal handler is needed since we pass SIGUSR1 to the inferior
 // for debugging multithreaded programs
@@ -203,7 +212,11 @@ static void InitHsaAgent()
 
         // Add a do nothing handler on SIGUSR2.
         // Needed since HCC or the HSA runtime seem to mess with handlers
-        signal(SIGUSR2, tempHandleSIGUSR2);
+        memset(&new_sigusr2, 0, sizeof(new_sigusr2));
+        memset(&old_sigusr2, 0, sizeof(old_sigusr2));
+        new_sigusr2.sa_handler = tempHandleSIGUSR2;
+        //signal(SIGUSR2, tempHandleSIGUSR2);
+        sigaction(SIGUSR2, &new_sigusr2, &old_sigusr2);
 
         AgentTriggerGDBEventLoop();
 

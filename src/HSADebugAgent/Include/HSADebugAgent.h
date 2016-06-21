@@ -25,4 +25,6 @@ HwDbgAgent::AgentISABufferManager* GetActiveISABufferManager();
 
 HwDbgAgent::AgentConfiguration* GetActiveAgentConfig();
 
+void RestoreSIGUSR2(void);
+
 #endif // HSA_DEBUG_AGENT_H
