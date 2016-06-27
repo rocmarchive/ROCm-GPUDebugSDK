@@ -19,8 +19,6 @@
 #include "AgentLogging.h"
 #include "AgentProcessPacket.h"
 #include "CommunicationControl.h"
-#include "CommandLoop.h"
-#include "HSADebugAgent.h"
 
 // Add DBE (Version decided by Makefile)
 #include "AMDGPUDebug.h"

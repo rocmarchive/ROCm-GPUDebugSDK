@@ -10,7 +10,6 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <unistd.h>
-#include <string.h>
 
 // HSA headers
 #include <hsa_api_trace.h>
