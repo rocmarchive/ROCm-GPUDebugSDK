@@ -35,8 +35,6 @@ namespace HwDbgAgent
 
 static pthread_t DebugEventHandler ;
 
-static bool use_hsa_breakpoint = false;
-
 /// Check if the fifo is empty.
 /// \todo The problem with this function is that there is a side effect
 /// of the data actually getting read, a better way may be to poll the fifo.
@@ -312,20 +310,10 @@ static HsailParentStatus CheckParentStatus(const AgentContext* pActiveContext)
  * as it is done in the in-process agent library. 
  */
 extern "C" {
-    void __attribute__((optimize("O0"))) TriggerStop(void)
+    void __attribute__((optimize("O0"))) TriggerGPUBreakpointStop(void)
     {
 	return;
     }
-}
-
-void SetHsaDebugBreakpoint(bool value)
-{
-    use_hsa_breakpoint = value;
-}
-
-bool GetHsaDebugBreakpoint(void)
-{
-    return use_hsa_breakpoint;
 }
 
 /// The DebugEvent loop is run as a separate thread.
@@ -415,30 +403,13 @@ void* DebugEventThread(void* pArgs)
 
             if (isStopNeeded)
             {
-                // Hand control to GDB - Send signal to GDB
-                // Using pthread_kill vs regular kill gives better control over
-                // the stopping location.
-                // It is the same old notion of multithreaded signalling where
-                // using a kill can result in a signal that be delivered
-                // to any thread in a process
-        	if(!use_hsa_breakpoint)
-        	{
-        	    if (pthread_kill(pthread_self(), SIGUSR2) == -1)
-        	    {
-        		// Get out of the thread,
-        		// I am not sure on how to handle signaling failure
-        		AGENT_ERROR("Could not signal gdb");
-        		exitSignal = 1;
-        	    }
-        	    else
-        	    {
-        		AGENT_LOG("DebugEventThread: Raise SIGUSR2 to stop");
-        	    }
-        	}
-        	else
-        	{
-        	    TriggerStop();
-        	}
+                // Hand control to GDB
+                // GDB will have inserted a breakpoint
+        	// in TriggerGPUBreakpointStop during
+        	// initialisation. Calling this function
+        	// will notify GDB that a GPU breakpoint
+        	// has been hit.
+        	TriggerGPUBreakpointStop();
             }
             else
             {

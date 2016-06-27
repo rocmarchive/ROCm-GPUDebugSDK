@@ -183,9 +183,6 @@ const std::string GetCommandTypeString(const HsailCommand ipCommand)
         case HSAIL_COMMAND_SET_LOGGING:
             return "HSAIL_COMMAND_CONTINUE";
 
-        case HSAIL_COMMAND_SET_HSABP:
-	    return "HSAIL_COMMAND_SET_HSABP";
-
         default:
             return "[Unknown Command]";
     }

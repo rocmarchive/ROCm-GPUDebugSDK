@@ -92,14 +92,6 @@ static HwDbgAgent::AgentConfiguration* psActiveAgentConfig = nullptr;
 
 static void InitAgentContext();
 
-static struct sigaction old_sigusr2, new_sigusr2;
-
-/* Restore the default handling for SIGUSR2 */
-void RestoreSIGUSR2()
-{
-    sigaction(SIGUSR2, &old_sigusr2, NULL);
-}
-
 // This signal handler is needed since we pass SIGUSR1 to the inferior
 // for debugging multithreaded programs
 void tempHandleSIGUSR1(int signal)
@@ -112,22 +104,6 @@ void tempHandleSIGUSR1(int signal)
 
     return;
 }
-
-void tempHandleSIGUSR2(int signal)
-{
-    if (signal != SIGUSR2)
-    {
-        AGENT_ERROR("A spurious signal detected when we expect SIGUSR2");
-        AGENT_ERROR("We don't know what to do");
-    }
-    else
-    {
-        AGENT_LOG("tempHandleSIGUSR2: Handling SIGUSR2 by doing nothing");
-    }
-
-    return;
-}
-
 
 // We initialize the AgentContext object by calling this function
 // on the library load and then pass it to the predispatch callback
@@ -209,14 +185,6 @@ static void InitHsaAgent()
         AgentNotifyGDB();
 
         signal(SIGUSR1, tempHandleSIGUSR1);
-
-        // Add a do nothing handler on SIGUSR2.
-        // Needed since HCC or the HSA runtime seem to mess with handlers
-        memset(&new_sigusr2, 0, sizeof(new_sigusr2));
-        memset(&old_sigusr2, 0, sizeof(old_sigusr2));
-        new_sigusr2.sa_handler = tempHandleSIGUSR2;
-        //signal(SIGUSR2, tempHandleSIGUSR2);
-        sigaction(SIGUSR2, &new_sigusr2, &old_sigusr2);
 
         AgentTriggerGDBEventLoop();
 

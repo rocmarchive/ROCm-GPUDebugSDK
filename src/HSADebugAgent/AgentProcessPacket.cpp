@@ -509,11 +509,6 @@ void AgentProcessPacket(HwDbgAgent::AgentContext* pActiveContext,
             AgentLogSetFromConsole(packet.m_loggingInfo);
             break;
 
-        case HSAIL_COMMAND_SET_HSABP:
-	    HwDbgAgent::SetHsaDebugBreakpoint(true);
-	    RestoreSIGUSR2();
-	    break;
-
         case HSAIL_COMMAND_UNKNOWN:
             pActiveContext->PrintDBEVersion();
             AgentErrorLog("Incomplete command packet error");
