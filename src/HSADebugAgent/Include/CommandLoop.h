@@ -34,10 +34,6 @@ HsailAgentStatus WaitForDebugThreadCompletion();
 
 HsailAgentStatus CreateDebugEventThread(DebugEventThreadParams* pArgs);
 
-void SetUseHsaDebugBreakpoint(bool value);
-
-bool GetUseHsaDebugBreakpoint(void);
-
 } // End Namespace HwDbgAgent
 
 #endif // COMMANDLOOP_H_
