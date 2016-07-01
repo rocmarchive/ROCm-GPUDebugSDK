@@ -104,22 +104,6 @@ void tempHandleSIGUSR1(int signal)
     return;
 }
 
-void tempHandleSIGUSR2(int signal)
-{
-    if (signal != SIGUSR2)
-    {
-        AGENT_ERROR("A spurious signal detected when we expect SIGUSR2");
-        AGENT_ERROR("We don't know what to do");
-    }
-    else
-    {
-        AGENT_LOG("tempHandleSIGUSR2: Handling SIGUSR2 by doing nothing");
-    }
-
-    return;
-}
-
-
 // We initialize the AgentContext object by calling this function
 // on the library load and then pass it to the predispatch callback
 static void CreateHsaAgentContext()
@@ -200,10 +184,6 @@ static void InitHsaAgent()
         AgentNotifyGDB();
 
         signal(SIGUSR1, tempHandleSIGUSR1);
-
-        // Add a do nothing handler on SIGUSR2.
-        // Needed since HCC or the HSA runtime seem to mess with handlers
-        signal(SIGUSR2, tempHandleSIGUSR2);
 
         AgentTriggerGDBEventLoop();
 

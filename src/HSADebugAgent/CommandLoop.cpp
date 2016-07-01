@@ -303,6 +303,19 @@ static HsailParentStatus CheckParentStatus(const AgentContext* pActiveContext)
     return parentStatus;
 }
 
+/* GDB will install a breakpoint on this function that will be used when
+ * a GPU kernel breakpoint is hit.
+ * It is defined as extern C to facilitate the name lookup by GDB. This
+ * could be changed to use exported symbol referring to locations
+ * as it is done in the in-process agent library. 
+ */
+extern "C" {
+    void __attribute__((optimize("O0"))) TriggerGPUBreakpointStop(void)
+    {
+	return;
+    }
+}
+
 /// The DebugEvent loop is run as a separate thread.
 /// It is launched from the predispatch callback.
 /// The predispatch callback will have created a breakpoint, so we can
@@ -390,23 +403,13 @@ void* DebugEventThread(void* pArgs)
 
             if (isStopNeeded)
             {
-                // Hand control to GDB - Send signal to GDB
-                // Using pthread_kill vs regular kill gives better control over
-                // the stopping location.
-                // It is the same old notion of multithreaded signalling where
-                // using a kill can result in a signal that be delivered
-                // to any thread in a process
-                if (pthread_kill(pthread_self(), SIGUSR2) == -1)
-                {
-                    // Get out of the thread,
-                    // I am not sure on how to handle signaling failure
-                    AGENT_ERROR("Could not signal gdb");
-                    exitSignal = 1;
-                }
-                else
-                {
-                    AGENT_LOG("DebugEventThread: Raise SIGUSR2 to stop");
-                }
+                // Hand control to GDB
+                // GDB will have inserted a breakpoint
+        	// in TriggerGPUBreakpointStop during
+        	// initialisation. Calling this function
+        	// will notify GDB that a GPU breakpoint
+        	// has been hit.
+        	TriggerGPUBreakpointStop();
             }
             else
             {
