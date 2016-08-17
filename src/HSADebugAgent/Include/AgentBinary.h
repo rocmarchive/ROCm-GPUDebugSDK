@@ -47,8 +47,11 @@ private:
     /// Max size for the code object buffer's shared memory
     size_t m_codeObjBufferMaxSize;
 
+    /// The ISA for this code object, populated by a syscall to amdhsacod
     AgentISABuffer* m_pIsaBuffer;
 
+    /// A flag to control if we want to disassemble the ISA.
+    /// Needed for platforms like KV where system() fails when in the predispatch
     bool m_enableISADisassemble;
 
     /// Disable copy constructor

@@ -92,6 +92,20 @@ void PreDispatchCallback(const hsa_dispatch_callback_t* pRTParam, void* pUserArg
 
     AgentLogAQLPacket(pAqlPacket);
 
+    // We always have to start debugging and send the binary to GDB now
+    // We will check if we have any function breakpoints pending and will accordingly stop
+    // We pass the parameters from the predispatch callback to the Agent Context
+    status = pActiveContext->BeginDebugging(pRTParam->agent,
+                                            pRTParam->queue,
+                                            pAqlPacket,
+                                            HWDBG_BEHAVIOR_DISABLE_DISPATCH_DEBUGGING);
+    PredispatchCheckStatus(status, "Error in BeginDebugging");
+
+    if (status != HSAIL_AGENT_STATUS_SUCCESS || pActiveContext->HasHwDebugStarted() == false)
+    {
+        return;
+    }
+
     // We should read the fifo command loop and check for any function or source breakpoints
     // We will consume everything in the FIFO but stop in the predispatch only if any kernel
     // function breakpoints are set, 50 is just a heuristic for now.
@@ -110,19 +124,6 @@ void PreDispatchCallback(const hsa_dispatch_callback_t* pRTParam, void* pUserArg
               "Queue ID " << pRTParam->queue->id << "\t" <<
               "Packet ID " << pRTParam->packet_id);
 
-    // We always have to start debugging and send the binary to GDB now
-    // We will check if we have any function breakpoints pending and will accordingly stop
-    // We pass the parameters from the predispatch callback to the Agent Context
-    status = pActiveContext->BeginDebugging(pRTParam->agent,
-                                            pRTParam->queue,
-                                            pAqlPacket,
-                                            HWDBG_BEHAVIOR_DISABLE_DISPATCH_DEBUGGING);
-    PredispatchCheckStatus(status, "Error in BeginDebugging");
-
-    if (status != HSAIL_AGENT_STATUS_SUCCESS || pActiveContext->HasHwDebugStarted() == false)
-    {
-        return;
-    }
 
     // Do all the Binary handling
     AgentBinary* pBinary = nullptr;
@@ -185,8 +186,8 @@ void PreDispatchCallback(const hsa_dispatch_callback_t* pRTParam, void* pUserArg
 
     if (isFuncBPStopNeeded)
     {
-        status = pActiveContext->RaiseStopSignal();
-        PredispatchCheckStatus(status, "Error  Raising the stop signal!");
+        AgentTriggerGDBEventLoop();
+        TriggerGPUBreakpointStop();
     }
     else
     {
@@ -217,7 +218,7 @@ void PreDispatchCallback(const hsa_dispatch_callback_t* pRTParam, void* pUserArg
     PredispatchCheckStatus(status, "Error in DisableAllBreakpoints");
 
     status = pActiveContext->EndDebugging();
-    PredispatchCheckStatus(status, "Error in EndDebugging when no source breakpoints found");
+    PredispatchCheckStatus(status, "Error in EndDebugging when disable dispatch is set");
 
     if (0 >= numPendingSrcBP)
     {

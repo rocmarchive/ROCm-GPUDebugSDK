@@ -14,7 +14,7 @@
 
 #include "AgentConfiguration.h"
 #include "AgentLogging.h"
-#include "AgentContext.h"
+#include "AgentNotifyGdb.h"
 #include "AgentUtils.h"
 #include "AgentWavePrinter.h"
 #include "CommunicationControl.h"
@@ -305,6 +305,18 @@ HsailAgentStatus AgentWavePrinter::SendActiveWavesToGdb(HwDbgEventType      dbeE
     }
 
     status = AgentUnMapSharedMemBuffer(pShm);
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("Could not unmap the wave info shared memory");
+        return status;
+    }
+
+    status = AgentNotfiyNewActiveWaves(nWaves);
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("Could not report the new active wave count");
+    }
+
     return status;
 }
 

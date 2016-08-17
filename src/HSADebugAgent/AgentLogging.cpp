@@ -160,6 +160,14 @@ void AgentLogManager::SetFromConsole(const HsailLogCommand loggingConfig)
 {
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
 
+    // If the env variable mechanism is used, dont change anything
+    char* pLogNameEnvVar;
+    pLogNameEnvVar = std::getenv("ROCM_GDB_ENABLE_LOG");
+    if (pLogNameEnvVar != NULL)
+    {
+        return;
+    }
+
     switch (loggingConfig)
     {
         case HSAIL_LOGGING_ENABLE_ALL:

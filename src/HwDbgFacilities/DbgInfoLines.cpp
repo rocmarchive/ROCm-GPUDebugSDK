@@ -222,7 +222,7 @@ FileLocation& FileLocation::operator= (const HwDbgUInt64& other)
 FileLocation& FileLocation::setFullPath(const char* pPath, size_t n)
 {
     clearFullPath();
-    size_t N = (0 < n) ? n : strlen(pPath);
+    size_t N = (0 < n) ? n : ((nullptr != pPath) ? strlen(pPath) : (size_t)0);
     if (0 < N)
     {
         m_fullPath = new (std::nothrow)char[N + 1];

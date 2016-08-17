@@ -15,7 +15,7 @@ The ROCm GPU Debug SDK includes the source code and libraries briefly listed bel
 # Build Steps
 1. Install ROCm using the instruction [here](https://github.com/RadeonOpenCompute/ROCm#installing-from-amd-rocm-repositories)
 2. Clone the Debug SDK repository
-  * `git clone https://github.com/RadeonOpenCompute/ROCm-GPUDebugSDK.git`
+  * `git clone https://github.com/HSAFoundation/ROCm-GPUDebugSDK.git`
 3. Build the AMD HSA Debug Agent Library and the Matrix multiplication examples by calling *make* in the *src/HSADebugAgent* and the *samples/MatrixMultiplication* directories respectively
   * `cd src/HSADebugAgent`
   * `make`

@@ -246,7 +246,7 @@ template<typename AddrType, typename LineType>
 void LineNumberMapping<AddrType, LineType>::ClearMap()
 {
     m_addrToLine.clear();
-    // m_lineToAddr.clear(); // TO_DO: Find out why removing this memory leak causes a crash in some situations
+    m_lineToAddr.clear();
     m_mappedAddrs.clear();
     m_mappedFirstAddrs.clear();
     m_mappedLines.clear();

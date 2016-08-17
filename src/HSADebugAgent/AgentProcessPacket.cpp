@@ -171,20 +171,22 @@ void KillHsailDebug(bool isQuitIssued)
 {
     AGENT_LOG("KillHsailDebug: isQuitIssued: " << isQuitIssued);
 
-    HsailAgentStatus status = g_ActiveContext->KillDispatch(isQuitIssued);
+    HsailAgentStatus status = g_ActiveContext->KillDispatch();
 
     if (status != HSAIL_AGENT_STATUS_SUCCESS)
     {
         AGENT_ERROR("KillDispatch: Killing the dispatch by expression evaluation");
     }
 
-    status = g_ActiveContext->EndDebugging();
+    // Force cleanup in EndDebugging since the dispatch is not yet complete
+    status = g_ActiveContext->EndDebugging(true);
 
     if (status != HSAIL_AGENT_STATUS_SUCCESS)
     {
         AGENT_ERROR("KillDispatch: Ending debugging from within expression evaluation");
     }
 
+    AGENT_LOG("Exit KillHsailDebug, status: " << status);
 }
 
 bool GetPrivateMemory(HwDbgDim3 workGroup, HwDbgDim3 workItem, size_t base, size_t offset, size_t numByteToRead, void* pMemOut, size_t* pNumBytesOut)
@@ -293,6 +295,14 @@ void SetHsailThreadCmdInfo(unsigned int wgX, unsigned int wgY, unsigned int wgZ,
 
     AgentLog(buffer);
 }
+
+// Used for cases where we want to make GDB parse a valid expression to populate
+// GDB's language specific structures
+void RunExpressionEval()
+{
+    AGENT_LOG("Do nothing expression evaluation");
+}
+
 
 void* gVariableValueForRelease = nullptr;
 void FreeVarValue(void)

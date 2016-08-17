@@ -36,4 +36,15 @@ HsailAgentStatus CreateDebugEventThread(DebugEventThreadParams* pArgs);
 
 } // End Namespace HwDbgAgent
 
+/// GDB will install a breakpoint on this function that will be used when
+/// a GPU kernel breakpoint is hit.
+/// It is defined as extern C to facilitate the name lookup by GDB. This
+/// could be changed to use exported symbol referring to locations
+/// as it is done in the in-process agent library.
+///
+extern "C"
+{
+    void __attribute__((optimize("O0"))) TriggerGPUBreakpointStop(void);
+}
+
 #endif // COMMANDLOOP_H_

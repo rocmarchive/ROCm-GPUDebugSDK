@@ -86,23 +86,14 @@ typedef VariableInfo<HwDbgUInt64, DwarfVariableLocation> DbgInfoVariable;
 // Helper structs:
 struct HwDbgInfo_FacInt_Debug
 {
-public:
-    // Ctor
-    HwDbgInfo_FacInt_Debug() :
-        hl_cn(nullptr), ll_cn(nullptr), ol_cn_owned(false), tl_cn(nullptr), llFileName(HWDBGFAC_INTERFACE_DUMMY_FILE_PATH), brig_code(nullptr, 0), brig_strtab(nullptr, 0) {};
+    enum HwDbgInfo_FacInt_Debug_Type {
+        HWDBGFAC_INTERFACE_ONE_LEVEL_DEBUG_INFO,
+        HWDBGFAC_INTERFACE_TWO_LEVEL_DEBUG_INFO
+    };
 
-    // Dtor
-    ~HwDbgInfo_FacInt_Debug()
+    HwDbgInfo_FacInt_Debug(HwDbgInfo_FacInt_Debug_Type tp) : m_tp(tp), m_cn(nullptr) { };
+    virtual ~HwDbgInfo_FacInt_Debug()
     {
-        delete tl_cn; tl_cn = nullptr;
-
-        if (ol_cn_owned)
-        {
-            delete hl_cn; delete ll_cn;
-        }
-
-        hl_cn = nullptr; ll_cn = nullptr;
-
         size_t allocVarCount = m_allocatedVariableObjects.size();
 
         for (size_t i = 0; i < allocVarCount; i++)
@@ -111,10 +102,10 @@ public:
         }
 
         m_allocatedVariableObjects.clear();
-    };
+    }
 
     // Adds a variable to the allocated variables list
-    void AddVariable(DbgInfoTwoLevelConsumer::LowLvlVariableInfo* pVar)
+    void AddVariable(DbgInfoVariable* pVar)
     {
         // Try and place it in an empty spot:
         size_t allocVarCount = m_allocatedVariableObjects.size();
@@ -134,7 +125,7 @@ public:
     // Removes (all instances of) a variable from the allocated variables vector
     // and returns true if the variable was found.
     // DOES NOT DELETE THE VARIABLE OBJECT!
-    bool RemoveVariable(DbgInfoTwoLevelConsumer::LowLvlVariableInfo* pVar)
+    bool RemoveVariable(DbgInfoVariable* pVar)
     {
         bool retVal = false;
         size_t allocVarCount = m_allocatedVariableObjects.size();
@@ -150,6 +141,63 @@ public:
 
         return retVal;
     }
+
+    // The debug info type
+    const HwDbgInfo_FacInt_Debug_Type m_tp;
+
+    // The "default" file name - or main CU file name. It is the first file mapped in the HL line table:
+    std::string m_firstMappedFileName;
+
+    // A vector of the variable objects allocated by the C API:
+    std::vector<DbgInfoVariable*> m_allocatedVariableObjects;
+
+    // The HSAIL source found inside the binary, if any:
+    std::string m_hsailSource;
+
+    // The consumer interface. Note that this class is not the owner of the consumer,
+    // and memory management should be handled by derived classes:
+    DbgInfoConsumerInterface* m_cn;
+};
+
+struct HwDbgInfo_FacInt_OneLevelDebug : public HwDbgInfo_FacInt_Debug
+{
+public:
+    // Ctor
+    HwDbgInfo_FacInt_OneLevelDebug() : HwDbgInfo_FacInt_Debug(HWDBGFAC_INTERFACE_ONE_LEVEL_DEBUG_INFO), ol_cn(nullptr) {};
+
+    // Dtor
+    virtual ~HwDbgInfo_FacInt_OneLevelDebug()
+    {
+        delete ol_cn;
+        ol_cn = nullptr;
+    };
+
+    // One-level debug information
+    DbgInfoDwarfParser::DwarfCodeScope ol_sc;   // One-level variable debug info
+    DbgInfoDwarfParser::DwarfLineMapping ol_lm; // One-level line debug info
+    DbgInfoOneLevelConsumer* ol_cn;             // One-level debug info consumer
+};
+
+struct HwDbgInfo_FacInt_TwoLevelDebug : public HwDbgInfo_FacInt_Debug
+{
+public:
+    // Ctor
+    HwDbgInfo_FacInt_TwoLevelDebug() :
+        HwDbgInfo_FacInt_Debug(HWDBGFAC_INTERFACE_TWO_LEVEL_DEBUG_INFO),
+        hl_cn(nullptr), ll_cn(nullptr), ol_cn_owned(false), tl_cn(nullptr), llFileName(HWDBGFAC_INTERFACE_DUMMY_FILE_PATH), brig_code(nullptr, 0), brig_strtab(nullptr, 0) {};
+
+    // Dtor
+    virtual ~HwDbgInfo_FacInt_TwoLevelDebug()
+    {
+        delete tl_cn; tl_cn = nullptr; m_cn = nullptr;
+
+        if (ol_cn_owned)
+        {
+            delete hl_cn; delete ll_cn;
+        }
+
+        hl_cn = nullptr; ll_cn = nullptr;
+    };
 
     // High-level debug information
     DbgInfoDwarfParser::DwarfCodeScope hl_sc;   // High-level variable debug info
@@ -170,18 +218,9 @@ public:
     // The file name used for the "source locations" in the low-level debug information
     const std::string llFileName;
 
-    // The "default" file name - or main CU file name. It is the first file mapped in the HL line table:
-    std::string m_firstMappedFileName;
-
     // Pointers to the BRIG code and string table sections
     KernelBinary brig_code;
     KernelBinary brig_strtab;
-
-    // A vector of the variable objects allocated by the C API:
-    std::vector<DbgInfoTwoLevelConsumer::LowLvlVariableInfo*> m_allocatedVariableObjects;
-
-    // The HSAIL source found inside the binary, if any:
-    std::string m_hsailSource;
 };
 
 // Helper functions:
@@ -190,10 +229,11 @@ public:
 FileLocation HwDbgInfoAddressResolver(const HwDbgUInt64& hlAddr, void* dbg)
 {
     HwDbgInfo_FacInt_Debug* pDbg = (HwDbgInfo_FacInt_Debug*)dbg;
+    HwDbgInfo_FacInt_TwoLevelDebug* pTLDbg = static_cast<HwDbgInfo_FacInt_TwoLevelDebug*>(pDbg);
 
     if (nullptr != pDbg)
     {
-        FileLocation llLine(pDbg->llFileName, hlAddr);
+        FileLocation llLine(pTLDbg->llFileName, hlAddr);
         return llLine;
     }
 
@@ -286,6 +326,103 @@ bool HwDbgInfoLocationResolver(const HwDbg::DwarfVariableLocation& hVarLoc, cons
 //////////////////////////////////////////////////////////////////////////
 // C API functions                                                      //
 //////////////////////////////////////////////////////////////////////////
+
+// Initialize a HwDbgInfo_debug from a single- or two- level binary
+HwDbgInfo_debug hwdbginfo_init_and_identify_binary(const void* bin, size_t bin_size, HwDbgInfo_err* err)
+{
+    // Validate input:
+    if (nullptr == bin || 0 == bin_size)
+    {
+        HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_NOBINARY);
+    }
+
+    // Look for the high-level BRIG and binary info:
+    HwDbgInfo_debug dbg = hwdbginfo_init_with_hsa_1_0_binary(bin, bin_size, err);
+    if (nullptr != dbg)
+    {
+        return dbg;
+    }
+
+    // Two-level information not found. Attempt to initialize as one-level binary:
+    dbg = hwdbginfo_init_with_single_level_binary(bin, bin_size, err);
+
+    return dbg;
+}
+
+// Initialize a HwDbgInfo_debug from a single level ELF/DWARF binary:
+HwDbgInfo_debug hwdbginfo_init_with_single_level_binary(const void* bin, size_t bin_size, HwDbgInfo_err* err)
+{
+    // Validate input:
+    if (nullptr == bin || 0 == bin_size)
+    {
+        HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_NOBINARY);
+    }
+
+    // Create the binary object:
+    KernelBinary olBin(bin, bin_size);
+
+    // Create the output struct:
+    HwDbgInfo_FacInt_OneLevelDebug* dbg = new(std::nothrow) HwDbgInfo_FacInt_OneLevelDebug;
+
+    if (nullptr == dbg)
+    {
+        HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_OUTOFMEMORY);
+    }
+
+    // Parse:
+    bool retVal = DbgInfoDwarfParser::InitializeWithBinary(olBin, dbg->ol_sc, dbg->ol_lm);
+
+    if (!retVal)
+    {
+        delete dbg;
+        HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_HLINFO);
+    }
+
+    // Initialize consumer:
+    dbg->ol_cn = new(std::nothrow) DbgInfoOneLevelConsumer;
+
+    if (nullptr == dbg->ol_cn)
+    {
+        delete dbg;
+        HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_OUTOFMEMORY);
+    }
+
+    // Set the parent struct's value:
+    dbg->m_cn = dbg->ol_cn;
+
+    dbg->ol_cn->SetCodeScope(&dbg->ol_sc);
+    dbg->ol_cn->SetLineNumberMap(&dbg->ol_lm);
+
+    // Set the default file name:
+    std::vector<FileLocation> ol_fileLocs;
+    bool rcHLLM = dbg->ol_lm.GetMappedLines(ol_fileLocs);
+
+    if (rcHLLM)
+    {
+        size_t fileLocCount = ol_fileLocs.size();
+
+        for (size_t i = 0; i < fileLocCount; i++)
+        {
+            std::string currentFileName = ol_fileLocs[i].fullPath();
+
+            if (!currentFileName.empty())
+            {
+                dbg->m_firstMappedFileName = currentFileName;
+                break;
+            }
+        }
+    }
+
+    // Report success:
+    if (nullptr != err)
+    {
+        *err = HWDBGINFO_E_SUCCESS;
+    }
+
+    HwDbgInfo_FacInt_Debug* pBaseDbg = static_cast<HwDbgInfo_FacInt_Debug*>(dbg);
+
+    return (HwDbgInfo_debug)pBaseDbg;
+}
 
 // Initialize a HwDbgInfo_debug from an HSA 1.0 (May 2015 design) binary:
 HwDbgInfo_debug hwdbginfo_init_with_hsa_1_0_binary(const void* bin, size_t bin_size, HwDbgInfo_err* err)
@@ -457,7 +594,7 @@ HwDbgInfo_debug hwdbginfo_init_with_two_binaries(const void* hl_bin, size_t hl_b
     KernelBinary llBin(ll_bin, ll_bin_size);
 
     // Create the output struct:
-    HwDbgInfo_FacInt_Debug* dbg = new(std::nothrow) HwDbgInfo_FacInt_Debug;
+    HwDbgInfo_FacInt_TwoLevelDebug* dbg = new(std::nothrow) HwDbgInfo_FacInt_TwoLevelDebug;
 
     if (nullptr == dbg)
     {
@@ -505,6 +642,9 @@ HwDbgInfo_debug hwdbginfo_init_with_two_binaries(const void* hl_bin, size_t hl_b
         HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_OUTOFMEMORY);
     }
 
+    // Set the parent struct's value:
+    dbg->m_cn = dbg->tl_cn;
+
     // Transfer ownership of the one-level consumers to the two-level consumer:
     dbg->ol_cn_owned = false;
 
@@ -534,7 +674,9 @@ HwDbgInfo_debug hwdbginfo_init_with_two_binaries(const void* hl_bin, size_t hl_b
         *err = HWDBGINFO_E_SUCCESS;
     }
 
-    return (HwDbgInfo_debug)dbg;
+    HwDbgInfo_FacInt_Debug* pBaseDbg = static_cast<HwDbgInfo_FacInt_Debug*>(dbg);
+
+    return (HwDbgInfo_debug)pBaseDbg;
 }
 
 // Get the HSAIL source from the binary:
@@ -679,7 +821,7 @@ HwDbgInfo_err hwdbginfo_addr_to_line(HwDbgInfo_debug dbg, HwDbgInfo_addr addr, H
 
     // Query the debug info:
     FileLocation matchedLine;
-    bool rc = pDbg->tl_cn->GetLineFromAddress(addr, matchedLine);
+    bool rc = pDbg->m_cn->GetLineFromAddress(addr, matchedLine);
 
     if (!rc)
     {
@@ -713,7 +855,7 @@ HwDbgInfo_err hwdbginfo_line_to_addrs(HwDbgInfo_debug dbg, HwDbgInfo_code_locati
 
     // Query the debug info:
     std::vector<DwarfAddrType> matchedAddrs;
-    bool rc = pDbg->tl_cn->GetAddressesFromLine(*pLoc, matchedAddrs, true, false); // All HL addresses, first LL address for each one
+    bool rc = pDbg->m_cn->GetAddressesFromLine(*pLoc, matchedAddrs, true, false); // All HL addresses, first LL address for each one
 
     if (!rc)
     {
@@ -767,7 +909,7 @@ HwDbgInfo_err hwdbginfo_nearest_mapped_line(HwDbgInfo_debug dbg, HwDbgInfo_code_
 
     // Query the debug info:
     FileLocation matchedLine;
-    bool rc = pDbg->tl_cn->GetNearestMappedLine(*pBaseLine, matchedLine);
+    bool rc = pDbg->m_cn->GetNearestMappedLine(*pBaseLine, matchedLine);
 
     // Restore the value before even checking for validity:
     if (wasEmptyPath)
@@ -804,7 +946,7 @@ HwDbgInfo_err hwdbginfo_nearest_mapped_addr(HwDbgInfo_debug dbg, HwDbgInfo_addr 
 
     // Query the debug info:
     HwDbgUInt64 matchedAddr = 0;
-    bool rc = pDbg->tl_cn->GetNearestMappedAddress(base_addr, matchedAddr);
+    bool rc = pDbg->m_cn->GetNearestMappedAddress(base_addr, matchedAddr);
 
     if (!rc)
     {
@@ -815,6 +957,39 @@ HwDbgInfo_err hwdbginfo_nearest_mapped_addr(HwDbgInfo_debug dbg, HwDbgInfo_addr 
     *addr = (HwDbgInfo_addr)matchedAddr;
 
     return HWDBGINFO_E_SUCCESS;
+}
+
+// Gets first legal (mapped) HL filepath
+HwDbgInfo_err hwdbginfo_first_file_name(HwDbgInfo_debug dbg, size_t buf_len, char* file_name, size_t* file_name_len)
+{
+    // Parameter validation:
+    HwDbgInfo_FacInt_Debug* pDbg = (HwDbgInfo_FacInt_Debug*)dbg;
+
+    if (nullptr == pDbg || (0 == buf_len && nullptr == file_name && nullptr == file_name_len))
+    {
+        return HWDBGINFO_E_PARAMETER;
+    }
+
+    HWDBGFAC_INTERFACE_VALIDATE_OUTPUT_BUFFER(buf_len, file_name);
+
+    // Output file path:
+    HwDbgInfo_err err = HWDBGINFO_E_SUCCESS;
+
+    const std::string& fullPath = pDbg->m_firstMappedFileName;
+
+    // If the first path is empty, there are no file paths in the debug info:
+    if (fullPath.empty())
+    {
+        return HWDBGINFO_E_NOTFOUND;
+    }
+
+    // Copy the value:
+    HWDBGFAC_INTERFACE_OUTPUT_STRING(fullPath, file_name, buf_len, file_name_len, err);
+
+    HWDBGFAC_INTERFACE_CHECKRETURN(err);
+
+    return HWDBGINFO_E_SUCCESS;
+
 }
 
 // Gets a list of all mapped addresses, for a "step into" operation:
@@ -832,7 +1007,7 @@ HwDbgInfo_err hwdbginfo_all_mapped_addrs(HwDbgInfo_debug dbg, size_t buf_len, Hw
 
     // Query the debug info:
     std::vector<DwarfAddrType> mappedAddrs;
-    bool rc = pDbg->tl_cn->GetMappedAddresses(mappedAddrs);
+    bool rc = pDbg->m_cn->GetMappedAddresses(mappedAddrs);
 
     if (!rc)
     {
@@ -872,7 +1047,7 @@ HwDbgInfo_err hwdbginfo_addr_call_stack(HwDbgInfo_debug dbg, HwDbgInfo_addr star
 
     // Query the debug info:
     std::vector<DbgInfoTwoLevelConsumer::TwoLvlCallStackFrame> cs;
-    bool rc = pDbg->tl_cn->GetAddressVirtualCallStack(start_addr, cs);
+    bool rc = pDbg->m_cn->GetAddressVirtualCallStack(start_addr, cs);
 
     if (!rc)
     {
@@ -949,7 +1124,7 @@ HwDbgInfo_err hwdbginfo_step_addresses(HwDbgInfo_debug dbg, HwDbgInfo_addr start
 
     // Query the debug info:
     std::vector<DwarfAddrType> stepAddrs;
-    bool rc = pDbg->tl_cn->GetCachedAddresses(start_addr, !step_out, stepAddrs);
+    bool rc = pDbg->m_cn->GetCachedAddresses(start_addr, !step_out, stepAddrs);
 
     if (!rc)
     {
@@ -1251,7 +1426,7 @@ HwDbgInfo_variable hwdbginfo_variable(HwDbgInfo_debug dbg, HwDbgInfo_addr start_
     pDbg->AddVariable(pVar);
 
     // Query the debug info:
-    bool rc = pDbg->tl_cn->GetVariableInfoInCurrentScope(start_addr, var_name, *pVar);
+    bool rc = pDbg->m_cn->GetVariableInfoInCurrentScope(start_addr, var_name, *pVar);
 
     if (!rc)
     {
@@ -1281,6 +1456,14 @@ HwDbgInfo_variable hwdbginfo_low_level_variable(HwDbgInfo_debug dbg, HwDbgInfo_a
         HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_PARAMETER);
     }
 
+    // Debug info type validation:
+    if (HwDbgInfo_FacInt_Debug::HWDBGFAC_INTERFACE_TWO_LEVEL_DEBUG_INFO != pDbg->m_tp)
+    {
+        HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_NOLLBINARY); // Should this be HWDBGINFO_E_LLINFO?
+    }
+
+    HwDbgInfo_FacInt_TwoLevelDebug* pTLDbg = static_cast<HwDbgInfo_FacInt_TwoLevelDebug*>(pDbg);
+
     // Create the output struct:
     DbgInfoTwoLevelConsumer::LowLvlVariableInfo* pVar = new(std::nothrow) DbgInfoTwoLevelConsumer::LowLvlVariableInfo;
 
@@ -1293,7 +1476,7 @@ HwDbgInfo_variable hwdbginfo_low_level_variable(HwDbgInfo_debug dbg, HwDbgInfo_a
     pDbg->AddVariable(pVar);
 
     // Query the debug info:
-    bool rc = pDbg->ll_cn->GetVariableInfoInCurrentScope(start_addr, var_name, *pVar);
+    bool rc = pTLDbg->ll_cn->GetVariableInfoInCurrentScope(start_addr, var_name, *pVar);
 
     if (!rc)
     {
@@ -1324,7 +1507,7 @@ HwDbgInfo_err hwdbginfo_frame_variables(HwDbgInfo_debug dbg, HwDbgInfo_addr star
 
     // Query the debug info:
     std::vector<std::string> varNames;
-    bool rc = pDbg->tl_cn->ListVariablesFromAddress(start_addr, stack_depth, leaf_members, varNames);
+    bool rc = pDbg->m_cn->ListVariablesFromAddress(start_addr, stack_depth, leaf_members, varNames);
 
     if (!rc)
     {

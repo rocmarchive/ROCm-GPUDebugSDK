@@ -320,7 +320,7 @@ HsailAgentStatus AgentBreakpointManager::CreateBreakpoint(const HwDbgContextHand
 
     // We need a code breakpoint
     // If this breakpoint has a PC, create it in DBE
-    if (HSAIL_ISA_PC_UNKOWN != ipPacket.m_pc && nullptr != DbeContextHandle)
+    if ((HSAIL_ISA_PC_UNKOWN != ipPacket.m_pc) && (nullptr != DbeContextHandle))
     {
         pBkpt->m_pc = (HwDbgCodeAddress)ipPacket.m_pc;
         pBkpt->m_condition.SetCondition(ipPacket.m_conditionPacket);
@@ -328,7 +328,10 @@ HsailAgentStatus AgentBreakpointManager::CreateBreakpoint(const HwDbgContextHand
         status = pBkpt->CreateBreakpointDBE(DbeContextHandle, ipPacket.m_gdbBreakpointID);
         // If success we know that m_bpState = HSAIL_BREAKPOINT_STATE_ENABLED;
     }
-
+    else
+    {
+        AGENT_LOG("CreateBreakpoint: Try to create a function breakpoint");
+    }
     // We need a function breakpoint
     // We should have some valid data in the packet to assign
     if (ipPacket.m_kernelName != nullptr && ipType == HSAIL_BREAKPOINT_TYPE_KERNEL_NAME_BP)
@@ -373,6 +376,7 @@ HsailAgentStatus AgentBreakpointManager::CreateBreakpoint(const HwDbgContextHand
     }
     else
     {
+        AGENT_LOG("CreateBreakpoint: Breakpoint was not successfully created");
         delete pBkpt;
     }
 
@@ -1168,8 +1172,8 @@ HsailAgentStatus AgentBreakpointManager::PrintStoppedReason(const HwDbgEventType
                     pFocusWaveControl->SetFocusWave(nullptr, &focusWg, &focusWi);
                 }
 
-                pHitBP->m_condition.PrintCondition();
-                pHitBP->PrintHitMessage();
+                //pHitBP->m_condition.PrintCondition();
+                //pHitBP->PrintHitMessage();
                 *pIsStopNeeded = true;
                 break;
             }
@@ -1313,8 +1317,8 @@ HsailAgentStatus AgentBreakpointManager::ReportFunctionBreakpoint(const std::str
 
     }
 
-    AGENT_OP("Breakpoint " << m_pBreakpoints.at(bpPosition)->m_GdbId.at(0) << " "
-             << "at GPU Kernel, " << kernelFunctionName << "()");
+    //AGENT_OP("Breakpoint " << m_pBreakpoints.at(bpPosition)->m_GdbId.at(0) << " "
+    //         << "at GPU Kernel, " << kernelFunctionName << "()");
 
     m_pBreakpoints.at(bpPosition)->m_hitcount += 1;
 

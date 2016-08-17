@@ -12,6 +12,7 @@
 
 #include <hsa.h>
 #include <hsa_api_trace.h>
+#include "HSAAPITable1_0.h"
 #include <hsa_ext_amd.h>
 #include <hsa_ext_finalize.h>
 
@@ -33,10 +34,10 @@ extern "C" {
 static const uint32_t MIN_QUEUE_SIZE_FOR_SOFTCP = 128;
 
 // The HSA Runtime's versions of HSA API functions
-ApiTable g_OrigCoreApiTable;
+CoreApiTable g_OrigCoreApiTable;
 
-// The HSA Tools Runtime versions of the tools RT functions
-ExtTable g_OrigHSAExtTable;
+// The HSA finalizer Runtime versions of the finalizer RT functions
+FinalizerExtTable g_OrigFinalizerExtTable;
 
 hsa_status_t
 HsaDebugAgent_hsa_shut_down()
@@ -181,13 +182,13 @@ HsaDebugAgent_hsa_ext_program_finalize(hsa_ext_program_t            program,
         }
     }
 
-     hsa_status_t status = g_OrigHSAExtTable.hsa_ext_program_finalize_fn(program,
-                                                                         isa,
-                                                                         call_convention,
-                                                                         control_directives,
-                                                                         ipFinalizerOptions.c_str(),
-                                                                         code_object_type,
-                                                                         code_object);
+     hsa_status_t status = g_OrigFinalizerExtTable.hsa_ext_program_finalize_fn(program,
+                                                                               isa,
+                                                                               call_convention,
+                                                                               control_directives,
+                                                                               ipFinalizerOptions.c_str(),
+                                                                               code_object_type,
+                                                                               code_object);
 
     if (status != HSA_STATUS_SUCCESS)
     {
@@ -247,28 +248,181 @@ hsa_status_t HsaDebugAgent_hsa_executable_load_code_object(
 
 }
 
-static void UpdateHSAFunctionTable(ApiTable* pCoreTable)
+static void UpdateHSAFunctionTable1_0(ApiTable1_0* pCoreTable)
 {
     if (pCoreTable == nullptr)
     {
         return;
     }
 
-    AGENT_LOG("Interception: Replace functions with HSADebugAgent versions");
+    AGENT_LOG("UpdateHSAFunctionTable1_0: Replace functions with HSADebugAgent versions");
 
     pCoreTable->hsa_queue_create_fn = HsaDebugAgent_hsa_queue_create;
     pCoreTable->hsa_shut_down_fn    = HsaDebugAgent_hsa_shut_down;
     pCoreTable->hsa_executable_load_code_object_fn = HsaDebugAgent_hsa_executable_load_code_object;
 
-
     pCoreTable->std_exts_->hsa_ext_program_finalize_fn = HsaDebugAgent_hsa_ext_program_finalize;
 }
 
 
-// This function will be extended with the kernel compilation interception too
-HsailAgentStatus InitHsaCoreAgentIntercept(ApiTable* pTable)
+static void BackupHSAFunctionTable1_0(ApiTable1_0* pTable)
 {
+    if (nullptr == pTable)
+    {
+        return;
+    }
+    AGENT_LOG("BackupHSAFunctionTable1_0: Backing up HSA functions.");
 
+    g_OrigCoreApiTable.hsa_status_string_fn = pTable->hsa_status_string_fn;
+    g_OrigCoreApiTable.hsa_init_fn = pTable->hsa_init_fn;
+    g_OrigCoreApiTable.hsa_shut_down_fn = pTable->hsa_shut_down_fn;
+    g_OrigCoreApiTable.hsa_system_get_info_fn = pTable->hsa_system_get_info_fn;
+    g_OrigCoreApiTable.hsa_system_extension_supported_fn = pTable->hsa_system_extension_supported_fn;
+    g_OrigCoreApiTable.hsa_system_get_extension_table_fn = pTable->hsa_system_get_extension_table_fn;
+    g_OrigCoreApiTable.hsa_agent_get_info_fn = pTable->hsa_agent_get_info_fn;
+    g_OrigCoreApiTable.hsa_iterate_agents_fn = pTable->hsa_iterate_agents_fn;
+    g_OrigCoreApiTable.hsa_agent_get_exception_policies_fn = pTable->hsa_agent_get_exception_policies_fn;
+    g_OrigCoreApiTable.hsa_agent_extension_supported_fn = pTable->hsa_agent_extension_supported_fn;
+    g_OrigCoreApiTable.hsa_signal_create_fn = pTable->hsa_signal_create_fn;
+    g_OrigCoreApiTable.hsa_signal_destroy_fn = pTable->hsa_signal_destroy_fn;
+    g_OrigCoreApiTable.hsa_signal_load_acquire_fn = pTable->hsa_signal_load_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_load_relaxed_fn = pTable->hsa_signal_load_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_store_relaxed_fn = pTable->hsa_signal_store_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_store_release_fn = pTable->hsa_signal_store_release_fn;
+    g_OrigCoreApiTable.hsa_signal_exchange_acq_rel_fn = pTable->hsa_signal_exchange_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_signal_exchange_acquire_fn = pTable->hsa_signal_exchange_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_exchange_relaxed_fn = pTable->hsa_signal_exchange_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_exchange_release_fn = pTable->hsa_signal_exchange_release_fn;
+    g_OrigCoreApiTable.hsa_signal_cas_acq_rel_fn = pTable->hsa_signal_cas_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_signal_cas_acquire_fn = pTable->hsa_signal_cas_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_cas_relaxed_fn = pTable->hsa_signal_cas_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_cas_release_fn = pTable->hsa_signal_cas_release_fn;
+    g_OrigCoreApiTable.hsa_signal_add_acq_rel_fn = pTable->hsa_signal_add_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_signal_add_acquire_fn = pTable->hsa_signal_add_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_add_relaxed_fn = pTable->hsa_signal_add_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_add_release_fn = pTable->hsa_signal_add_release_fn;
+    g_OrigCoreApiTable.hsa_signal_subtract_acq_rel_fn = pTable->hsa_signal_subtract_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_signal_subtract_acquire_fn = pTable->hsa_signal_subtract_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_subtract_relaxed_fn = pTable->hsa_signal_subtract_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_subtract_release_fn = pTable->hsa_signal_subtract_release_fn;
+    g_OrigCoreApiTable.hsa_signal_and_acq_rel_fn = pTable->hsa_signal_and_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_signal_and_acquire_fn = pTable->hsa_signal_and_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_and_relaxed_fn = pTable->hsa_signal_and_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_and_release_fn = pTable->hsa_signal_and_release_fn;
+    g_OrigCoreApiTable.hsa_signal_or_acq_rel_fn = pTable->hsa_signal_or_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_signal_or_acquire_fn = pTable->hsa_signal_or_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_or_relaxed_fn = pTable->hsa_signal_or_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_or_release_fn = pTable->hsa_signal_or_release_fn;
+    g_OrigCoreApiTable.hsa_signal_xor_acq_rel_fn = pTable->hsa_signal_xor_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_signal_xor_acquire_fn = pTable->hsa_signal_xor_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_xor_relaxed_fn = pTable->hsa_signal_xor_relaxed_fn;
+    g_OrigCoreApiTable.hsa_signal_xor_release_fn = pTable->hsa_signal_xor_release_fn;
+    g_OrigCoreApiTable.hsa_signal_wait_acquire_fn = pTable->hsa_signal_wait_acquire_fn;
+    g_OrigCoreApiTable.hsa_signal_wait_relaxed_fn = pTable->hsa_signal_wait_relaxed_fn;
+    g_OrigCoreApiTable.hsa_queue_create_fn = pTable->hsa_queue_create_fn;
+    g_OrigCoreApiTable.hsa_soft_queue_create_fn = pTable->hsa_soft_queue_create_fn;
+    g_OrigCoreApiTable.hsa_queue_destroy_fn = pTable->hsa_queue_destroy_fn;
+    g_OrigCoreApiTable.hsa_queue_inactivate_fn = pTable->hsa_queue_inactivate_fn;
+    g_OrigCoreApiTable.hsa_queue_load_read_index_acquire_fn = pTable->hsa_queue_load_read_index_acquire_fn;
+    g_OrigCoreApiTable.hsa_queue_load_read_index_relaxed_fn = pTable->hsa_queue_load_read_index_relaxed_fn;
+    g_OrigCoreApiTable.hsa_queue_load_write_index_acquire_fn = pTable->hsa_queue_load_write_index_acquire_fn;
+    g_OrigCoreApiTable.hsa_queue_load_write_index_relaxed_fn = pTable->hsa_queue_load_write_index_relaxed_fn;
+    g_OrigCoreApiTable.hsa_queue_store_write_index_relaxed_fn = pTable->hsa_queue_store_write_index_relaxed_fn;
+    g_OrigCoreApiTable.hsa_queue_store_write_index_release_fn = pTable->hsa_queue_store_write_index_release_fn;
+    g_OrigCoreApiTable.hsa_queue_cas_write_index_acq_rel_fn = pTable->hsa_queue_cas_write_index_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_queue_cas_write_index_acquire_fn = pTable->hsa_queue_cas_write_index_acquire_fn;
+    g_OrigCoreApiTable.hsa_queue_cas_write_index_relaxed_fn = pTable->hsa_queue_cas_write_index_relaxed_fn;
+    g_OrigCoreApiTable.hsa_queue_cas_write_index_release_fn = pTable->hsa_queue_cas_write_index_release_fn;
+    g_OrigCoreApiTable.hsa_queue_add_write_index_acq_rel_fn = pTable->hsa_queue_add_write_index_acq_rel_fn;
+    g_OrigCoreApiTable.hsa_queue_add_write_index_acquire_fn = pTable->hsa_queue_add_write_index_acquire_fn;
+    g_OrigCoreApiTable.hsa_queue_add_write_index_relaxed_fn = pTable->hsa_queue_add_write_index_relaxed_fn;
+    g_OrigCoreApiTable.hsa_queue_add_write_index_release_fn = pTable->hsa_queue_add_write_index_release_fn;
+    g_OrigCoreApiTable.hsa_queue_store_read_index_relaxed_fn = pTable->hsa_queue_store_read_index_relaxed_fn;
+    g_OrigCoreApiTable.hsa_queue_store_read_index_release_fn = pTable->hsa_queue_store_read_index_release_fn;
+    g_OrigCoreApiTable.hsa_region_get_info_fn = pTable->hsa_region_get_info_fn;
+    g_OrigCoreApiTable.hsa_agent_iterate_regions_fn = pTable->hsa_agent_iterate_regions_fn;
+    g_OrigCoreApiTable.hsa_memory_allocate_fn = pTable->hsa_memory_allocate_fn;
+    g_OrigCoreApiTable.hsa_memory_free_fn = pTable->hsa_memory_free_fn;
+    g_OrigCoreApiTable.hsa_memory_copy_fn = pTable->hsa_memory_copy_fn;
+    g_OrigCoreApiTable.hsa_memory_assign_agent_fn = pTable->hsa_memory_assign_agent_fn;
+    g_OrigCoreApiTable.hsa_memory_register_fn = pTable->hsa_memory_register_fn;
+    g_OrigCoreApiTable.hsa_memory_deregister_fn = pTable->hsa_memory_deregister_fn;
+    g_OrigCoreApiTable.hsa_isa_from_name_fn = pTable->hsa_isa_from_name_fn;
+    g_OrigCoreApiTable.hsa_isa_get_info_fn = pTable->hsa_isa_get_info_fn;
+    g_OrigCoreApiTable.hsa_isa_compatible_fn = pTable->hsa_isa_compatible_fn;
+    g_OrigCoreApiTable.hsa_code_object_serialize_fn = pTable->hsa_code_object_serialize_fn;
+    g_OrigCoreApiTable.hsa_code_object_deserialize_fn = pTable->hsa_code_object_deserialize_fn;
+    g_OrigCoreApiTable.hsa_code_object_destroy_fn = pTable->hsa_code_object_destroy_fn;
+    g_OrigCoreApiTable.hsa_code_object_get_info_fn = pTable->hsa_code_object_get_info_fn;
+    g_OrigCoreApiTable.hsa_code_object_get_symbol_fn = pTable->hsa_code_object_get_symbol_fn;
+    g_OrigCoreApiTable.hsa_code_symbol_get_info_fn = pTable->hsa_code_symbol_get_info_fn;
+    g_OrigCoreApiTable.hsa_code_object_iterate_symbols_fn = pTable->hsa_code_object_iterate_symbols_fn;
+    g_OrigCoreApiTable.hsa_executable_create_fn = pTable->hsa_executable_create_fn;
+    g_OrigCoreApiTable.hsa_executable_destroy_fn = pTable->hsa_executable_destroy_fn;
+    g_OrigCoreApiTable.hsa_executable_load_code_object_fn = pTable->hsa_executable_load_code_object_fn;
+    g_OrigCoreApiTable.hsa_executable_freeze_fn = pTable->hsa_executable_freeze_fn;
+    g_OrigCoreApiTable.hsa_executable_get_info_fn = pTable->hsa_executable_get_info_fn;
+    g_OrigCoreApiTable.hsa_executable_global_variable_define_fn = pTable->hsa_executable_global_variable_define_fn;
+    g_OrigCoreApiTable.hsa_executable_agent_global_variable_define_fn = pTable->hsa_executable_agent_global_variable_define_fn;
+    g_OrigCoreApiTable.hsa_executable_readonly_variable_define_fn = pTable->hsa_executable_readonly_variable_define_fn;
+    g_OrigCoreApiTable.hsa_executable_validate_fn = pTable->hsa_executable_validate_fn;
+    g_OrigCoreApiTable.hsa_executable_get_symbol_fn = pTable->hsa_executable_get_symbol_fn;
+    g_OrigCoreApiTable.hsa_executable_symbol_get_info_fn = pTable->hsa_executable_symbol_get_info_fn;
+    g_OrigCoreApiTable.hsa_executable_iterate_symbols_fn = pTable->hsa_executable_iterate_symbols_fn;
+
+    g_OrigFinalizerExtTable.hsa_ext_program_create_fn = pTable->std_exts_->hsa_ext_program_create_fn;
+    g_OrigFinalizerExtTable.hsa_ext_program_destroy_fn = pTable->std_exts_->hsa_ext_program_destroy_fn;
+    g_OrigFinalizerExtTable.hsa_ext_program_add_module_fn = pTable->std_exts_->hsa_ext_program_add_module_fn;
+    g_OrigFinalizerExtTable.hsa_ext_program_iterate_modules_fn = pTable->std_exts_->hsa_ext_program_iterate_modules_fn;
+    g_OrigFinalizerExtTable.hsa_ext_program_get_info_fn = pTable->std_exts_->hsa_ext_program_get_info_fn;
+    g_OrigFinalizerExtTable.hsa_ext_program_finalize_fn = pTable->std_exts_->hsa_ext_program_finalize_fn;
+
+    // These member doesn't appear in 1.0 interface
+    g_OrigCoreApiTable.version = { 0 };
+    g_OrigFinalizerExtTable.version = { 0 };
+}
+
+// This function will be extended with the kernel compilation interception too
+HsailAgentStatus InitHsaCoreAgentIntercept1_0(ApiTable1_0* pTable)
+{
+    AGENT_LOG("InitHsaCoreAgentIntercept1_0: Read HSA API Table");
+
+    if (pTable == nullptr)
+    {
+        AGENT_ERROR("InitHsaCoreAgentIntercept1_0: HSA Runtime provided a nullptr API Table");
+        return HSAIL_AGENT_STATUS_FAILURE;
+    }
+
+    // This saves the original pointers
+    BackupHSAFunctionTable1_0(pTable);
+
+    // We override the table that we get from the runtime
+    UpdateHSAFunctionTable1_0(pTable);
+
+    AGENT_LOG("InitHsaCoreAgentIntercept1_0: Finished updating HSA API Table");
+    return HSAIL_AGENT_STATUS_SUCCESS;
+}
+
+static void UpdateHSAFunctionTable(HsaApiTable* pTable)
+{
+    if (pTable == nullptr)
+    {
+        return;
+    }
+
+    AGENT_LOG("Interception: Replace functions with HSADebugAgent versions");
+
+    pTable->core_->hsa_queue_create_fn = HsaDebugAgent_hsa_queue_create;
+    pTable->core_->hsa_shut_down_fn    = HsaDebugAgent_hsa_shut_down;
+    pTable->core_->hsa_executable_load_code_object_fn = HsaDebugAgent_hsa_executable_load_code_object;
+
+    pTable->finalizer_ext_->hsa_ext_program_finalize_fn = HsaDebugAgent_hsa_ext_program_finalize;
+}
+
+
+// This function will be extended with the kernel compilation interception too
+HsailAgentStatus InitHsaCoreAgentIntercept(HsaApiTable* pTable)
+{
     AGENT_LOG("InitHsaCoreAgentIntercept: Read HSA API Table");
 
     if (pTable == nullptr)
@@ -279,12 +433,12 @@ HsailAgentStatus InitHsaCoreAgentIntercept(ApiTable* pTable)
 
     // This saves the original pointers
     memcpy(static_cast<void*>(&g_OrigCoreApiTable),
-           static_cast<const void*>(pTable),
-           sizeof(ApiTable));
+           static_cast<const void*>(pTable->core_),
+           sizeof(CoreApiTable));
 
-    memcpy(static_cast<void*>(&g_OrigHSAExtTable),
-           static_cast<void*>(pTable->std_exts_),
-           sizeof(ExtTable));
+    memcpy(static_cast<void*>(&g_OrigFinalizerExtTable),
+           static_cast<void*>(pTable->finalizer_ext_),
+           sizeof(FinalizerExtTable));
 
     // We override the table that we get from the runtime
     UpdateHSAFunctionTable(pTable);
@@ -292,6 +446,7 @@ HsailAgentStatus InitHsaCoreAgentIntercept(ApiTable* pTable)
     AGENT_LOG("InitHsaCoreAgentIntercept: Finished updating HSA API Table");
     return HSAIL_AGENT_STATUS_SUCCESS;
 }
+
 
 #ifdef __cplusplus
 }

@@ -427,7 +427,7 @@ HsailAgentStatus AgentContext::EndDebugging(const bool& forceCleanup)
 
 // Kill the ongoing dispatch,
 // If you are exiting HwDbg, EndDebugging needs to be called separately
-HsailAgentStatus AgentContext::KillDispatch(const bool isQuitIssued)
+HsailAgentStatus AgentContext::KillDispatch()
 {
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
 
@@ -457,11 +457,8 @@ HsailAgentStatus AgentContext::KillDispatch(const bool isQuitIssued)
         }
     }
 
-    if (isDispatchKilled)
-    {
-        AgentNotifyKillComplete(isDispatchKilled, isQuitIssued);
-    }
-    else
+
+    if (!isDispatchKilled)
     {
         AGENT_ERROR("KillDispatch: Error in HwDbgKillAll, tried 10 times" <<
                     GetDBEStatusString(dbeStatus));
@@ -506,13 +503,13 @@ const HwDbgContextHandle AgentContext::GetActiveHwDebugContext() const
     {
         AGENT_ERROR("GetActiveHwDebugContext: Returning a nullptr HwDebugContext");
     }
+#endif
 
     if (m_AgentState != HSAIL_AGENT_STATE_BEGIN_DEBUGGING)
     {
-        AGENT_ERROR("GetActiveHwDebugContext: Agent not in Begin Debugging");
+        AGENT_LOG("GetActiveHwDebugContext: Agent not in Begin Debugging");
     }
 
-#endif
     return m_DebugContextHandle;
 }
 
@@ -637,23 +634,6 @@ HsailAgentStatus AgentContext::PrintDBEVersion() const
 
         return HSAIL_AGENT_STATUS_FAILURE;
     }
-}
-
-HsailAgentStatus AgentContext::RaiseStopSignal() const
-{
-    if (pthread_kill(pthread_self(), SIGUSR2) == -1)
-    {
-        // I am not sure on how to handle signaling failure
-        AGENT_ERROR("Could not signal gdb");
-        return HSAIL_AGENT_STATUS_FAILURE;
-    }
-    else
-    {
-        AGENT_LOG("RaiseStopSignal: Raise SIGUSR2");
-    }
-
-
-    return HSAIL_AGENT_STATUS_SUCCESS;
 }
 
 HsailAgentStatus AgentContext::ReleaseKernelBinary()
@@ -797,6 +777,12 @@ HsailAgentStatus AgentContext::ShutDown(const bool skipDbeShutDown)
         AGENT_LOG("Agent Should not have binaries present now");
     }
 
+    status = AgentNotifyEndDebugging(true);
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_LOG("Could not push end debugging notification");
+    }
+
     // Exit early if it is already closed
     if (m_AgentState == HSAIL_AGENT_STATE_CLOSED)
     {
@@ -820,6 +806,8 @@ HsailAgentStatus AgentContext::ShutDown(const bool skipDbeShutDown)
     {
         AGENT_LOG("Skipping the HwDbgShutDown call");
     }
+
+    m_DebugContextHandle = nullptr;
 
     // Free the shared memory for the binaries
     status = FreeBinarySharedMemBuffer();

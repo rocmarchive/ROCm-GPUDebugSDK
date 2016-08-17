@@ -26,12 +26,14 @@ HsailAgentStatus AgentFocusWaveControl::NotifyFocusWaveSwitch()
     if (!CompareHwDbgDim3(m_focusWorkGroup, gs_UNKNOWN_HWDBGDIM3) &&
         !CompareHwDbgDim3(m_focusWorkItem, gs_UNKNOWN_HWDBGDIM3))
     {
+
+        /*
         AGENT_OP("Switching to work-group ("
                  << m_focusWorkGroup.x << "," << m_focusWorkGroup.y << "," << m_focusWorkGroup.z
                  << ") and work-item ("
                  << m_focusWorkItem.x << "," << m_focusWorkItem.y << "," << m_focusWorkItem.z
                  << ")");
-
+        */
         AGENT_LOG("Switching to work-group ("
                   << m_focusWorkGroup.x << "," << m_focusWorkGroup.y << "," << m_focusWorkGroup.z
                   << ") and work-item ("

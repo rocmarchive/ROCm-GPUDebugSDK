@@ -153,12 +153,18 @@ HsailAgentStatus AgentBreakpoint::CreateBreakpointDBE(const HwDbgContextHandle d
         return status;
     }
 
-    if (dbeHandle == nullptr || m_pc == HSAIL_ISA_PC_UNKOWN)
+    if (dbeHandle == nullptr )
     {
-        AGENT_ERROR("CreateBreakpointDBE: Invalid dbeHandle or PC has not been set yet");
+        AGENT_ERROR("CreateBreakpointDBE: Invalid dbeHandle ");
         return status;
     }
 
+    if (m_pc == HSAIL_ISA_PC_UNKOWN)
+    {
+        AGENT_ERROR("CreateBreakpointDBE: Invalid PC ");
+        return status;
+
+    }
     // If no other GDB ID existed or the ID was not specified, we need to create in DB
     bool isBreakpointNeededInDBE = m_GdbId.empty() || gdbID == g_UNKOWN_GDB_BKPT_ID ;
 

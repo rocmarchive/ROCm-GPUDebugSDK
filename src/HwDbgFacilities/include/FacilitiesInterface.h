@@ -137,6 +137,10 @@ typedef unsigned int HwDbgInfo_locreg;
 /*******************/
 /* Initialization: */
 /*******************/
+/* Create a HwDbgInfo_debug from a single- or two- level binary */
+HwDbgInfo_debug hwdbginfo_init_and_identify_binary(const void* bin, size_t bin_size, HwDbgInfo_err* err);
+/* Create a HwDbgInfo_debug from a single level ELF/DWARF binary */
+HwDbgInfo_debug hwdbginfo_init_with_single_level_binary(const void* bin, size_t bin_size, HwDbgInfo_err* err);
 /* Create a HwDbgInfo_debug from an HSA 1.0 (May) binary */
 HwDbgInfo_debug hwdbginfo_init_with_hsa_1_0_binary(const void* bin, size_t bin_size, HwDbgInfo_err* err);
 /* Create a HwDbgInfo_debug directly from the BRIG DWARF container and ISA DWARF container */
@@ -166,6 +170,8 @@ HwDbgInfo_err hwdbginfo_line_to_addrs(HwDbgInfo_debug dbg, HwDbgInfo_code_locati
 HwDbgInfo_err hwdbginfo_nearest_mapped_line(HwDbgInfo_debug dbg, HwDbgInfo_code_location base_line, HwDbgInfo_code_location* line);
 /* Get the nearest legal (mapped) LL address */
 HwDbgInfo_err hwdbginfo_nearest_mapped_addr(HwDbgInfo_debug dbg, HwDbgInfo_addr base_addr, HwDbgInfo_addr* addr);
+/* Get first legal (mapped) HL filepath */
+HwDbgInfo_err hwdbginfo_first_file_name(HwDbgInfo_debug dbg, size_t buf_len, char* file_name, size_t* file_name_len);
 /* Get all legal (mapped) LL addresses */
 HwDbgInfo_err hwdbginfo_all_mapped_addrs(HwDbgInfo_debug dbg, size_t buf_len, HwDbgInfo_addr* addrs, size_t* addr_count);
 /* Get a LL address's virtual (inlined) call stack */

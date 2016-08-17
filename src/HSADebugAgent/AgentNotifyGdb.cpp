@@ -58,6 +58,12 @@ static const std::string AgentGetGDBNotificationString(const HsailNotification n
         case HSAIL_NOTIFY_AGENT_ERROR:
             return "HSAIL_NOTIFY_AGENT_ERROR";
 
+        case HSAIL_NOTIFY_KILL_COMPLETE:
+            return "HSAIL_NOTIFY_KILL_COMPLETE";
+
+        case  HSAIL_NOTIFY_NEW_ACTIVE_WAVES:
+            return "HSAIL_NOTIFY_NEW_ACTIVE_WAVES";
+
         // Should never happen
         default:
             return "[UNKNOWN_NOTIFICATION_TYPE]";
@@ -199,6 +205,22 @@ HsailAgentStatus AgentNotifyNewBinary(const size_t                        binary
         AgentErrorLog("Error in Pushing a new binary notification to GDB\n");
         return status;
     }
+
+    return status;
+}
+
+HsailAgentStatus AgentNotfiyNewActiveWaves(const int numActiveWaves)
+{
+    // Initialize the payload and zero it out
+    HsailNotificationPayload newActiveWaves;
+    memset(&newActiveWaves, 0, sizeof(HsailNotificationPayload));
+
+    newActiveWaves.m_Notification = HSAIL_NOTIFY_NEW_ACTIVE_WAVES;
+    newActiveWaves.payload.NewActiveWaveNotification.m_numActiveWaves = numActiveWaves;
+
+    AGENT_LOG("Report " << numActiveWaves << " waves to GDB");
+
+    HsailAgentStatus status =  PushGDBNotification(newActiveWaves);
 
     return status;
 }

@@ -216,6 +216,19 @@ static HsailAgentStatus PostBreakpointEventUpdates(AgentContext*    pActiveConte
         return status;
     }
 
+    // Note: The order in which we do the post-break updates below is significant:
+    //
+    // We first need to write the active waves to the shared memory and let gdb know
+    // how many there are.
+    // That way when gdb gets the subsequent focus wave and tries to validate the received
+    // information, it is looking at an updated wave buffer
+
+    // Let gdb know what the dbe told us
+    // Just save it to the shmem for now, the bp manager will let gdb know # of waves
+    status = pWavePrinter->SendActiveWavesToGdb(dbeEventType,
+                                                pActiveContext->GetActiveHwDebugContext());
+    CommandLoopStatusCheck(status, "Error: SendActiveWavesToGdb");
+
     // We just choose a focus wave based on the active waves
     status = pFocusControl->SetFocusWave(pActiveContext->GetActiveHwDebugContext(), nullptr, nullptr);
     CommandLoopStatusCheck(status, "Error: SetFocus");
@@ -227,12 +240,6 @@ static HsailAgentStatus PostBreakpointEventUpdates(AgentContext*    pActiveConte
                                            pFocusControl,
                                            pIsStopNeeded);
     CommandLoopStatusCheck(status, "Error: PrintStoppedReason");
-
-    // Let gdb know what the dbe told us
-    // Just save it to the shmem for now, the bp manager will let gdb know # of waves
-    status = pWavePrinter->SendActiveWavesToGdb(dbeEventType,
-                                                pActiveContext->GetActiveHwDebugContext());
-    CommandLoopStatusCheck(status, "Error: SendActiveWavesToGdb");
 
     // Update hit counts for all breakpoints
     // Also send notification to gdb for # of waves in buffer
@@ -303,16 +310,18 @@ static HsailParentStatus CheckParentStatus(const AgentContext* pActiveContext)
     return parentStatus;
 }
 
-/* GDB will install a breakpoint on this function that will be used when
- * a GPU kernel breakpoint is hit.
- * It is defined as extern C to facilitate the name lookup by GDB. This
- * could be changed to use exported symbol referring to locations
- * as it is done in the in-process agent library. 
- */
-extern "C" {
+/// GDB will install a breakpoint on this function that will be used when
+/// a GPU kernel breakpoint is hit.
+/// It is defined as extern C to facilitate the name lookup by GDB. This
+/// could be changed to use exported symbol referring to locations
+/// as it is done in the in-process agent library.
+///
+extern "C"
+{
     void __attribute__((optimize("O0"))) TriggerGPUBreakpointStop(void)
     {
-	return;
+        AGENT_LOG("TriggerGPUBreakpointStop() called.");
+        return;
     }
 }
 
@@ -403,13 +412,17 @@ void* DebugEventThread(void* pArgs)
 
             if (isStopNeeded)
             {
-                // Hand control to GDB
-                // GDB will have inserted a breakpoint
-        	// in TriggerGPUBreakpointStop during
-        	// initialisation. Calling this function
-        	// will notify GDB that a GPU breakpoint
-        	// has been hit.
-        	TriggerGPUBreakpointStop();
+                 // Hand control to GDB
+                 // GDB will have inserted a breakpoint
+                 // in TriggerGPUBreakpointStop during
+                 // initialisation. Calling this function
+                 // will notify GDB that a GPU breakpoint
+                 // has been hit.
+                 /// HSADBG-690, add an extra AgentTriggerGDBEventLoop() call before
+                 ///             triggering GPU breakpoint so that gdb won't miss.
+                 AgentTriggerGDBEventLoop();
+                 TriggerGPUBreakpointStop();
+                 AgentTriggerGDBEventLoop();
             }
             else
             {

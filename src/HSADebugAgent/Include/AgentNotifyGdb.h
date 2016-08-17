@@ -20,6 +20,9 @@ void AgentTriggerGDBEventLoop();
 
 HsailAgentStatus AgentNotifyBreakpointHit(const HsailNotificationPayload payload);
 
+// Let gdb know how many active waves we have now
+HsailAgentStatus AgentNotfiyNewActiveWaves(const int numActiveWaves);
+
 /// Let GDB know about a new binary, the notification sends parameters for the binary
 /// which will be found in shared memory
 /// This will also update dispatch statistics. Note that this logic will break if

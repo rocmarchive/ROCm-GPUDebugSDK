@@ -50,6 +50,8 @@ bool AgentIsWorkItemPresentInWave(const HwDbgDim3&          workGroup,
                                   const HwDbgDim3&          workItem,
                                   const HwDbgWavefrontInfo* pWaveInfo);
 
+HsailAgentStatus AgentLoadFileAsSharedObject(const std::string& ipFilename);
+
 HsailAgentStatus AgentWriteISAToFile(const std::string&                  isaFileName,
                                            hsa_kernel_dispatch_packet_t* aql);
 

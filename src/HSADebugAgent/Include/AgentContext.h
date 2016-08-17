@@ -155,7 +155,7 @@ public:
     HsailAgentStatus EndDebugging(const bool& forceCleanUp = false);
 
     /// Kill all waves
-    HsailAgentStatus KillDispatch(const bool isQuitIssued);
+    HsailAgentStatus KillDispatch();
 
     /// Save the code object in the AgentContext
     HsailAgentStatus AddKernelBinaryToContext(AgentBinary* pAgentBinary);
@@ -183,9 +183,6 @@ public:
 
     /// Just a logging function
     HsailAgentStatus PrintDBEVersion() const;
-
-    /// Raise stop signal
-    HsailAgentStatus RaiseStopSignal() const;
 
     /// Compare parent PID saved at object creation with present parent PID
     bool CompareParentPID() const;

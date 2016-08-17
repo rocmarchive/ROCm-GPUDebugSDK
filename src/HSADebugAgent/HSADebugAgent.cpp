@@ -104,6 +104,7 @@ void tempHandleSIGUSR1(int signal)
     return;
 }
 
+
 // We initialize the AgentContext object by calling this function
 // on the library load and then pass it to the predispatch callback
 static void CreateHsaAgentContext()
@@ -339,18 +340,16 @@ static HsailAgentStatus AgentCheckVersion(uint64_t runtimeVersion, uint64_t fail
                                  << HSA_RUNTIME_TOOLS_LIB);
                         AGENT_ERROR("Debug agent not enabled. Version mismatch between ROCm runtime and "
                                     << HSA_RUNTIME_TOOLS_LIB);
-                        return status;
                     }
                 }
                 else
                 {
                     AGENT_ERROR("Debug agent not enabled," << HSA_RUNTIME_TOOLS_LIB
                                 << "version could not be verified");
-                    AGENT_ERROR("AgentCheckVersion: pFailedToolNames[i] is nullptr")
-                    return status;
-
+                    AGENT_ERROR("AgentCheckVersion: pFailedToolNames[" << i << "] is nullptr");
                 }
             }
+            return status;
         }
         else
         {
@@ -426,11 +425,10 @@ HsailAgentStatus InitDispatchCallbacks(hsa_queue_t* queue)
     return status;
 }
 
-extern "C" bool OnLoad(ApiTable* pTable,
+extern "C" bool OnLoad(void* pTable,
                        uint64_t runtimeVersion, uint64_t failedToolCount,
                        const char* const* pFailedToolNames)
 {
-
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
 
     InitAgentConfiguration();
@@ -464,7 +462,14 @@ extern "C" bool OnLoad(ApiTable* pTable,
     }
 
 
-    status = InitHsaCoreAgentIntercept(pTable);
+    if (0 == runtimeVersion)
+    {
+        status = InitHsaCoreAgentIntercept1_0(reinterpret_cast<ApiTable1_0*>(pTable));
+    }
+    else
+    {
+        status = InitHsaCoreAgentIntercept(reinterpret_cast<HsaApiTable*>(pTable));
+    }
 
     if (status  != HSAIL_AGENT_STATUS_SUCCESS)
     {

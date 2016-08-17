@@ -288,6 +288,36 @@ HsailAgentStatus AgentDeleteFile(const char* ipFilename)
 
 }
 
+
+HsailAgentStatus AgentLoadFileAsSharedObject(const std::string& ipFilename)
+{
+    void* hModule = nullptr;
+    HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
+
+    dlerror(); // clear error status before processing
+    hModule = dlopen(ipFilename.c_str(), RTLD_LAZY );
+    char* dllstatus = dlerror();
+
+    if (nullptr != hModule)
+    {
+        AGENT_OP("File: "  << ipFilename << " loaded as a shared library");
+        status = HSAIL_AGENT_STATUS_SUCCESS;
+    }
+    else
+    {
+        if (nullptr != dllstatus)
+        {
+            AGENT_ERROR("\"" <<ipFilename << "\"" << "Not Loaded (error: " << dllstatus << ")");
+        }
+        else
+        {
+            AGENT_ERROR(ipFilename  << "\t Not Loaded " << dllstatus );
+        }
+    }
+
+    return status;
+}
+
 HsailAgentStatus AgentWriteBinaryToFile(const void*  pBinary, size_t binarySize, const char*  pFilename)
 {
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;

@@ -6,7 +6,7 @@ add-auto-load-safe-path /
 
 
 define ROCmConfigure
-# Enable logging, the file will be deleted by the high level script 
+# Enable logging, the file will be deleted by the high level script
 # if logging isnt desired as per the env variable
 set logging on
 
@@ -16,7 +16,6 @@ echo ....Certain GDB signals have been changed\n
 
 set pagination off
 handle SIGUSR1 nostop pass noprint
-handle SIGUSR2 stop pass print
 set mi-async on
 end
 

@@ -36,4 +36,6 @@ const char gs_AgentToGdbFifoName[]  = "fifo-agent-w-gdb-r";
 // The FIFO written to by GDB and read by Agent (For things like create / delete bp command)
 const char gs_GdbToAgentFifoName[]  = "fifo-gdb-w-agent-r";
 
+const char gs_ISAFileNamePath[]  = "/tmp/debugger_isa_dump";
+
 #endif // COMMUNICATIONPARMS_H

@@ -239,32 +239,6 @@ HsailAgentStatus AgentBinary::NotifyGDB(const hsa_kernel_dispatch_packet_t* pAql
         return status;
     }
 
-    if (m_enableISADisassemble)
-    {
-        // Presently when we use amdhsacod, we just use the ISA obtained from the code object
-        // We dont need to use the ISA objects cached by the Manager
-        status = GetActiveISABufferManager()->WriteToSharedMem(*m_pIsaBuffer);
-    }
-
-#if 0
-    // We should not exit if the ISA buffer is not valid, we should still report the code object to gdb
-    unsigned int isaBufferPosn = 0;
-    status = GetActiveISABufferManager()->FindIsaBufferFromKernelName(m_kernelName, isaBufferPosn);
-
-    if (HSAIL_AGENT_STATUS_SUCCESS == status)
-    {
-        status = GetActiveISABufferManager()->WriteToSharedMem(isaBufferPosn);
-        if (HSAIL_AGENT_STATUS_FAILURE == status)
-        {
-            AGENT_ERROR("NotifyGDB: Could not write ISA to shared mem");
-        }
-    }
-    else
-    {
-        AGENT_ERROR("NotifyGDB: Could not find ISA for kernel " << m_kernelName);
-    }
-#endif
-
     status = AgentNotifyNewBinary(m_binarySize,
                                   m_hlSymbolName, m_llSymbolName,
                                   m_kernelName,

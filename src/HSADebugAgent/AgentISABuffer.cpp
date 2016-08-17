@@ -19,6 +19,7 @@
 #include "AgentNotifyGdb.h"
 #include "AgentUtils.h"
 #include "CommunicationControl.h"
+#include "CommunicationParams.h"
 #include "HSADebugAgent.h"
 
 namespace HwDbgAgent
@@ -96,7 +97,8 @@ bool AgentISABuffer::TestForAMDHsaCod()
 
     if (system (NULL) == 0)
     {
-        AGENT_ERROR("Cannot call system(),");
+        int noTermErrno = errno;
+        AGENT_ERROR("Cannot call system(), errno: " << noTermErrno << ", " << strerror(noTermErrno));
         return retCode;
     }
 
@@ -106,6 +108,7 @@ bool AgentISABuffer::TestForAMDHsaCod()
     int ret_value = system(whichAmdhsacod.c_str());
     int err_no = errno;
     AGENT_LOG("TestForAMDHsaCod: Return code: " << retCode << " errno: " << strerror(err_no));
+
     if (ret_value == 0)
     {
         retCode = true;
@@ -120,7 +123,7 @@ HsailAgentStatus  AgentISABuffer::DisassembleAMDHsaCod(const size_t size, const 
 
     const std::string amdhsaCodCommand = "amdhsacod -dump -code";
     const std::string codeObjFilename  = "/tmp/codeobj";
-    const std::string isatextFilename  = "/tmp/isa";
+    std::string isatextFilename(gs_ISAFileNamePath);
 
     if (size <= 0 || codeObj == nullptr )
     {
@@ -143,6 +146,7 @@ HsailAgentStatus  AgentISABuffer::DisassembleAMDHsaCod(const size_t size, const 
 
     // The command to call amdhsacod is
     // amdhsacod -dump -code CodeObjFileName > IsaFile
+    // Using ">" when redirecting will clear the file before writing
     std::stringstream disassembleCommand;
     disassembleCommand << amdhsaCodCommand << " " << codeObjFilename << " > " << isatextFilename;
 
@@ -152,31 +156,16 @@ HsailAgentStatus  AgentISABuffer::DisassembleAMDHsaCod(const size_t size, const 
     int err_no = errno;
     AGENT_LOG("DisassembleCodeObject: Return code: " << retCode << "errno: " << strerror(err_no));
 
-    if (retCode == 0)
-    {
-        status = PopulateISAFromFile(isatextFilename);
-        if (status != HSAIL_AGENT_STATUS_SUCCESS)
-        {
-            AGENT_ERROR("Could not populate ISA from " << isatextFilename);
-        }
-
-        status = AgentDeleteFile(codeObjFilename.c_str());
-        if (status != HSAIL_AGENT_STATUS_SUCCESS)
-        {
-            AGENT_ERROR("Could not delete " << codeObjFilename);
-        }
-
-        status = AgentDeleteFile(isatextFilename.c_str());
-        if (status != HSAIL_AGENT_STATUS_SUCCESS)
-        {
-            AGENT_ERROR("Could not delete " << isatextFilename);
-        }
-    }
-    else
+    if (retCode != 0)
     {
         AGENT_ERROR("Could not disassemble successfully");
     }
 
+    status = AgentDeleteFile(codeObjFilename.c_str());
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("Could not delete " << codeObjFilename);
+    }
 
     return status;
 }

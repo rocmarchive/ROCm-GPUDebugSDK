@@ -31,7 +31,7 @@ typedef enum
     HSAIL_COMMAND_MOMENTARY_BREAKPOINT, // Set an HSAIL momentary breakpoint (which is automatically deleted)
     HSAIL_COMMAND_CONTINUE,             // Continue the inferior process
     HSAIL_COMMAND_SET_LOGGING,          // Configure the logging in the Agent
-    HSAIL_COMMAND_SET_ISA_DUMP         // Configure dumping of ISA
+    HSAIL_COMMAND_SET_ISA_DUMP          // Configure dumping of ISA
 } HsailCommand;
 
 typedef enum
@@ -54,8 +54,9 @@ typedef enum
     HSAIL_NOTIFY_FOCUS_CHANGE,      // Change in focus workgroup and workitem
     HSAIL_NOTIFY_START_DEBUG_THREAD,// The debug thread has been started
     HSAIL_NOTIFY_PREDISPATCH_STATE, // Information about the predispatch callback
-    HSAIL_NOTIFY_AGENT_ERROR,        // Some error from the agent or the DBE - let gdb know
-    HSAIL_NOTIFY_KILL_COMPLETE       // Notification to let GDB know about kill finishing
+    HSAIL_NOTIFY_AGENT_ERROR,       // Some error from the agent or the DBE - let gdb know
+    HSAIL_NOTIFY_KILL_COMPLETE,     // Notification to let GDB know about kill finishing
+    HSAIL_NOTIFY_NEW_ACTIVE_WAVES   // Set the number of active waves
 } HsailNotification;
 
 typedef enum
@@ -256,6 +257,12 @@ typedef struct _HsailNotificationPayload
             bool isQuitCommandIssued;   // Used by handle_hsail_event if kill / quit command was originally issued
         } KillCompleteNotification;
 
+        // HSAIL_NOTIFY_NEW_ACTIVE_WAVES
+        struct
+        {
+            int m_numActiveWaves;
+
+        } NewActiveWaveNotification;
     } payload;
 } HsailNotificationPayload;
 
