@@ -64,6 +64,9 @@ HsailAgentStatus AgentCloseLogger();
 
 void AgentLog(const char*);
 
+void AgentLogLoadMap(const HsailSegmentDescriptor* pLoadedSegments,
+                     const size_t                  numSegments);
+
 void AgentLogPacketInfo(const HsailCommandPacket& incomingPacket);
 
 void AgentLogSetFromConsole(const HsailLogCommand ipCommand);

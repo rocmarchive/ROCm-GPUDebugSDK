@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include <hsa.h>
@@ -54,6 +55,8 @@ HsailAgentStatus AgentLoadFileAsSharedObject(const std::string& ipFilename);
 
 HsailAgentStatus AgentWriteISAToFile(const std::string&                  isaFileName,
                                            hsa_kernel_dispatch_packet_t* aql);
+
+bool AgentIsFileExists(const char *fileName);
 
 /// Delete a file
 HsailAgentStatus AgentDeleteFile(const char* ipFilename);

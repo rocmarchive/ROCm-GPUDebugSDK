@@ -170,6 +170,81 @@ HsailAgentStatus  AgentISABuffer::DisassembleAMDHsaCod(const size_t size, const 
     return status;
 }
 
+
+HsailAgentStatus  AgentISABuffer::DisassembleLLVMObjDump(const size_t size, const void* codeObj)
+{
+    HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
+
+    //We first look for the hcc-lc/llvm since we know that version supports gcn
+    const std::string LLVM_CMD_OPTION1 = "/opt/rocm/hcc-lc/llvm/bin/llvm-objdump";
+
+    // In future hcc versions, the objdump that supports gcn will be in hcc-lc/compiler and
+    // option1 wont exist
+    const std::string LLVM_CMD_OPTION2 = "/opt/rocm/hcc-lc/compiler/bin/llvm-objdump";
+
+    std::string llvmCmdFileNameToUse("");
+
+    const std::string llvmCmdOptions = "-disassemble -arch=amdgcn  -mcpu=fiji";
+    const std::string codeObjFilename  = "/tmp/codeobj";
+    std::string isatextFilename(gs_ISAFileNamePath);
+
+    if (size <= 0 || codeObj == nullptr )
+    {
+        AGENT_ERROR("DisassembleLLVMObjDump: Invalid input");
+        return status;
+    }
+
+    if (AgentIsFileExists(LLVM_CMD_OPTION1.c_str()))
+    {
+        llvmCmdFileNameToUse.append(LLVM_CMD_OPTION1);
+    }
+    else if (AgentIsFileExists(LLVM_CMD_OPTION2.c_str()))
+    {
+        llvmCmdFileNameToUse.append(LLVM_CMD_OPTION2);
+    }
+    else
+    {
+        AGENT_ERROR("DisassembleLLVMObjDump: Could not find llvm-objdump");
+        return status;
+    }
+
+    status =  AgentWriteBinaryToFile(codeObj, size, codeObjFilename.c_str());
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("Could not save the code object to disassemble ISA");
+        return status;
+    }
+
+    // The command to call llvm-objdump is
+    // llvm-objdump -disassemble -arch=amdgcn  -mcpu=fiji codeobj.bin
+    // Using ">" when redirecting will clear the file before writing
+
+    std::stringstream disassembleCommand;
+    disassembleCommand << llvmCmdFileNameToUse << " "
+                       << llvmCmdOptions << " "
+                       << codeObjFilename << " > "
+                       << isatextFilename;
+
+    AGENT_LOG("DisassembleCodeObject: Call " << disassembleCommand.str());
+
+    int retCode = system(disassembleCommand.str().c_str());
+    int err_no = errno;
+    AGENT_LOG("DisassembleCodeObject: Return code: " << retCode << "errno: " << strerror(err_no));
+
+    if (retCode != 0)
+    {
+        AGENT_ERROR("Could not disassemble successfully");
+    }
+
+    status = AgentDeleteFile(codeObjFilename.c_str());
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("Could not delete " << codeObjFilename);
+    }
+
+    return status;
+}
+
 HsailAgentStatus AgentISABuffer::PopulateISAFromFile(const std::string& ipFileName)
 {
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
@@ -222,8 +297,10 @@ HsailAgentStatus AgentISABuffer::PopulateISAFromFile(const std::string& ipFileNa
 HsailAgentStatus AgentISABuffer::PopulateISAFromCodeObj(const size_t size, const void* codeObj)
 {
     // Use amdhsacod
-    HsailAgentStatus status = DisassembleAMDHsaCod(size, codeObj);
+    //HsailAgentStatus status = DisassembleAMDHsaCod(size, codeObj);
 
+    // Use LLVM tools
+    HsailAgentStatus status = DisassembleLLVMObjDump(size, codeObj);
     return status;
 }
 
@@ -254,131 +331,5 @@ bool AgentISABuffer::CheckForKernelName(const std::string& kernelName) const
 
     return retCode;
 }
-
-AgentISABufferManager::AgentISABufferManager():
-    m_IsaBufferList(),
-    m_isaBufferShmKey(-1),
-    m_isaBufferShmSize(0)
-{
-    HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
-
-    status = GetActiveAgentConfig()->GetConfigShmKey(HSAIL_DEBUG_CONFIG_ISA_BUFFER_SHM, m_isaBufferShmKey);
-    if (status != HSAIL_AGENT_STATUS_SUCCESS)
-    {
-        AGENT_ERROR("Could not get shared mem key");
-        return;
-    }
-
-    status = GetActiveAgentConfig()->GetConfigShmSize(HSAIL_DEBUG_CONFIG_ISA_BUFFER_SHM, m_isaBufferShmSize);
-    if (status != HSAIL_AGENT_STATUS_SUCCESS)
-    {
-        AGENT_ERROR("Could not get shared mem max size");
-        return;
-    }
-
-    AgentAllocSharedMemBuffer(m_isaBufferShmKey, m_isaBufferShmSize);
-}
-
-// Logic of how the finalizer saves the ISA filename:
-//
-// File saved as amdhsaXXX.isa,
-// Where XXX goes form 000, 001 and so on..
-void AgentISABufferManager::GetNextFileName(std::string& outFilename) const
-{
-    static int callCount = 0;
-    ++callCount;
-
-    std::stringstream countSStream;
-    countSStream << std::setw(3) << std::setfill('0') << callCount;
-
-    std::stringstream fileNameSStream;
-    fileNameSStream << "amdhsa" << countSStream.str() << ".isa";
-
-    outFilename.assign(fileNameSStream.str());
-}
-
-// This is called if the ISA is available
-// If we have it, we drop it in the shared memory buffer and send it off to GDB.
-HsailAgentStatus AgentISABufferManager::FindIsaBufferFromKernelName(const std::string& kernelName, unsigned int& opPosition) const
-{
-    opPosition = -1;
-
-    for (unsigned int i=0; i< m_IsaBufferList.size(); i++)
-    {
-        if (m_IsaBufferList.at(i) != nullptr)
-        {
-            if (m_IsaBufferList.at(i)->CheckForKernelName(kernelName))
-            {
-                opPosition = i;
-                return HSAIL_AGENT_STATUS_SUCCESS;
-            }
-        }
-    }
-
-    return HSAIL_AGENT_STATUS_FAILURE;
-}
-
-HsailAgentStatus AgentISABufferManager::AppendISABuffer()
-{
-    HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
-    std::string fileName;
-    GetNextFileName(fileName);
-
-    AgentISABuffer* pIsaBuffer = new(std::nothrow)AgentISABuffer;
-
-    if (pIsaBuffer == nullptr)
-    {
-        return status;
-    }
-
-    status = pIsaBuffer->PopulateISAFromFile(fileName);
-
-    m_IsaBufferList.push_back(pIsaBuffer);
-
-    status = AgentDeleteFile(fileName.c_str());
-
-    return status;
-}
-
-AgentISABufferManager::~AgentISABufferManager()
-{
-    for (unsigned int i=0; i< m_IsaBufferList.size(); i++)
-    {
-        if (m_IsaBufferList.at(i) != nullptr)
-        {
-            delete m_IsaBufferList.at(i);
-            m_IsaBufferList.at(i) = nullptr;
-        }
-    }
-
-    m_IsaBufferList.clear();
-
-    AgentFreeSharedMemBuffer(m_isaBufferShmKey, m_isaBufferShmSize);
-}
-
-HsailAgentStatus AgentISABufferManager::WriteToSharedMem(const unsigned int isaBufferId) const
-{
-    HsailAgentStatus status =  HSAIL_AGENT_STATUS_FAILURE;
-
-    if (m_IsaBufferList.size() < isaBufferId)
-    {
-        AGENT_ERROR("No ISA buffer at position " << isaBufferId);
-        return status;
-    }
-
-    status =  m_IsaBufferList.at(isaBufferId)->WriteToSharedMem(m_isaBufferShmKey, m_isaBufferShmSize);
-
-    return status;
-}
-
-HsailAgentStatus AgentISABufferManager::WriteToSharedMem(const AgentISABuffer& ipISABuffer) const
-{
-    HsailAgentStatus status =  HSAIL_AGENT_STATUS_FAILURE;
-
-    status =  ipISABuffer.WriteToSharedMem(m_isaBufferShmKey, m_isaBufferShmSize);
-
-    return status;
-}
-
 
 }

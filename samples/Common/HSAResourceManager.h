@@ -95,8 +95,16 @@ public:
         const std::size_t argsSizeInBytes);
 
     /// Return the kernel arg buffer pointer
-    /// \returns the internal kernel arg buffer pointer
+    /// \return the internal kernel arg buffer pointer
     void* GetArgBufferPointer() const;
+
+    /// Return the kernel arg buffer size.
+    /// \return the kernel arg buffer size.
+    size_t GetBufferSize() const;
+
+    /// Return the start offset of the actual argument content from kernel arg buffer pointer.
+    /// \return the start offset
+    size_t GetStartOffset() const;
 
 private:
     /// disable copy constructor
@@ -108,6 +116,7 @@ private:
     void*     m_pArgBuffer;     ///< pointer to the kernel argument buffer
     size_t    m_argBufferSize;  ///< the allocated size of kernel argument buffer in bytes
     size_t    m_location;       ///< the next available location in the arg buffer
+    size_t    m_startOffset;    ///< the start offset from m_pArgBuffer.
 }; // class HSAKernelArgBuffer
 
 // -----------------------------------------------------------------------------
@@ -139,9 +148,10 @@ public:
 
     /// \brief Call hsa_init() and setup a default GPU device
     /// \param[in] verbosePrint  set to true to print extra message outputs to console
+    /// \param[in] gpuIndex  The index of the GPU to use by default in a multi-GPU system
     ///
     /// \return true if there is no error
-    static bool InitRuntime(bool verbosePrint = true);
+    static bool InitRuntime(bool verbosePrint = true, unsigned int gpuIndex = 0);
 
     /// \brief DetroyQueue() and then shut down HSA runtime
     ///
@@ -213,13 +223,26 @@ public:
     /// \brief Copy one aql packet setting to another
     ///
     /// \param[in]  aqlPacket     The AQL packet to be copied from
-    /// \param[in]  bCopySignal   Tell the function whether to copy the signal value from iAql.
+    /// \param[in]  bCopySignal   Tell the function whether to copy the signal value from aqlPacket.
     /// \param[out] aqlPacketOut  The AQL packet to be copied to.
     /// \return true if there is no error
     bool CopyKernelDispatchPacket(
         const hsa_kernel_dispatch_packet_t& aqlPacket,
         const bool                          bCopySignal,
-        hsa_kernel_dispatch_packet_t& aqlPacketOut) const;
+        hsa_kernel_dispatch_packet_t& aqlPacketOut);
+
+    /// \brief Copy one aql packet setting to another
+    ///
+    /// \param[in]  aqlPacket          The AQL packet to be copied from
+    /// \param[out] aqlPacketOut       The AQL packet to be copied to.
+    /// \param[in]  bCopySignal        Tell the function whether to copy the signal value from aqlPacket.
+    /// \param[in]  bCopyKernArgAddr   Tell the function whether to copy the kernarg_addrss from aqlPacket.
+    /// \return true if there is no error
+    bool CopyKernelDispatchPacket(
+        const hsa_kernel_dispatch_packet_t& aqlPacket,
+              hsa_kernel_dispatch_packet_t  aqlPacketOut,
+        const bool                          bCopySignal = false,
+        const bool                          bCopyKernArgAddr = false);
 
     /// \brief Append a kernel argument into argument buffer of specified aql,
     ///
@@ -391,7 +414,7 @@ private:
     static hsa_queue_t* ms_pQueue;
 
     std::vector<hsa_signal_t> m_signals;
-    std::unordered_map<hsa_kernel_dispatch_packet_t*, AQLInfo> m_aqlInfos;
+    std::unordered_map<const hsa_kernel_dispatch_packet_t*, AQLInfo> m_aqlInfos;
     std::unordered_set<uint64_t> m_executableSet;
     std::unordered_set<uint64_t> m_codeObjSet;
 

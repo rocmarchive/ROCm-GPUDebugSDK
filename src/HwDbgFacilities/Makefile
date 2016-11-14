@@ -30,7 +30,7 @@ INCLUDEDIRS= \
 	-I/usr/include/
 
 # Compiler Info
-CC=g++
+CXX=g++
 
 CFLAGS= $(INCLUDEDIRS) -g -fPIC -m64 -Wall -std=c++11
 
@@ -42,6 +42,7 @@ SOURCES=\
     DbgInfoDwarfParser.cpp\
     DbgInfoUtils.cpp\
     DbgInfoLines.cpp\
+    DbgInfoLogging.cpp \
     FacilitiesInterface.cpp
 
 OBJECTS=$(SOURCES:.cpp=.o)
@@ -50,10 +51,10 @@ OUTPUTLIB=../../lib/x86_64
 
 hsa: $(OBJECTS)
 	mkdir -p $(OUTPUTLIB)
-	$(CC) $(LDFLAGS) $(OBJECTS) $(AMDTLIBDWARFLINKCMD) -o $(OUTPUTLIB)/libAMDHwDbgFacilities$(ARCH_SUFFIX).so
+	$(CXX) $(LDFLAGS) $(OBJECTS) $(AMDTLIBDWARFLINKCMD) -o $(OUTPUTLIB)/libAMDHwDbgFacilities$(ARCH_SUFFIX).so
 
 .cpp.o:
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CXX) -c $(CFLAGS) $< -o $@
 
 clean:
 	rm -f $(OUTPUTLIB)/libAMDHwDbgFacilities$(ARCH_SUFFIX).so

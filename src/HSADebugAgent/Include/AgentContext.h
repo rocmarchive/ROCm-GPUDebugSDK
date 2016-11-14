@@ -77,6 +77,12 @@ private:
     /// Max size for the code object buffer's shared memory
     size_t m_codeObjBufferMaxSize;
 
+    /// Key for the code object buffer's shared memory
+    int m_loadMapBufferShmKey;
+
+    /// Max size for the code object buffer's shared memory
+    size_t m_loadMapBufferMaxSize;
+
     /// Disable copy constructor
     AgentContext(const AgentContext&);
 
@@ -95,10 +101,10 @@ private:
     /// rather than the AgentBinary class.
     /// The key is not passed since its global
     /// Private function to initialize the shared memory buffer for the binary
-    HsailAgentStatus AllocateBinarySharedMemBuffer();
+    HsailAgentStatus AllocateBinaryandLoadMapSharedMem();
 
     /// Private function to free the shared memory buffer for the binary
-    HsailAgentStatus FreeBinarySharedMemBuffer();
+    HsailAgentStatus FreeBinaryandLoadMapSharedMem();
 
 public:
     /// A bit to track that we have received the continue command from the host
@@ -168,6 +174,8 @@ public:
 
     /// Just a logging function
     const std::string GetAgentStateString() const;
+
+    const hsa_kernel_dispatch_packet_t* GetDispatchedAQLPacket() const;
 
     /// Accessor method to get the BP manager for this context
     AgentBreakpointManager* GetBpManager() const;

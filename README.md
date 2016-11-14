@@ -22,5 +22,8 @@ The ROCm GPU Debug SDK includes the source code and libraries briefly listed bel
     * Note that *matrixMul_kernel.hsail* is included for reference only. This sample will load the pre-built hsa binary (*matrixMul_kernel.brig*) to run the kernel.
   * `cd samples/MatrixMultiplication`
   * `make`
-4. Build the ROCm-GDB debugger [as shown in the GDB repository](https://github.com/RadeonOpenCompute/ROCm-GDB).
+4. Build the Debug Facilities library by calling *make* in the *src/HwDbgFacilities* directory
+  * `cd src/HwDbgFacilities`
+  * `make`
+5. Build the ROCm-GDB debugger [as shown in the GDB repository](https://github.com/RadeonOpenCompute/ROCm-GDB).
 

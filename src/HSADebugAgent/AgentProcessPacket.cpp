@@ -12,6 +12,8 @@
 #include <sstream>
 #include <stdio.h>
 
+#include "hsa.h"
+
 // Agent includes
 #include "AgentBreakpointManager.h"
 #include "AgentContext.h"
@@ -53,8 +55,8 @@ static void DBEDeleteBreakpoint(HwDbgAgent::AgentContext* pActiveContext,
 
 
 
-static void DBECreateBreakpoint(HwDbgAgent::AgentContext* pActiveContext,
-                                const HsailCommandPacket& ipPacket)
+static void CreateBreakpointPacket(      HwDbgAgent::AgentContext* pActiveContext,
+                                   const HsailCommandPacket&       ipPacket)
 {
 
     HwDbgAgent::AgentBreakpointManager* pBpManager = pActiveContext->GetBpManager();
@@ -65,8 +67,10 @@ static void DBECreateBreakpoint(HwDbgAgent::AgentContext* pActiveContext,
         bpType = HwDbgAgent::HSAIL_BREAKPOINT_TYPE_KERNEL_NAME_BP;
     }
 
+    // Get Loaded Agent
     HsailAgentStatus status;
     status = pBpManager->CreateBreakpoint(pActiveContext->GetActiveHwDebugContext(),
+                                          pActiveContext->GetDispatchedAQLPacket(),
                                           ipPacket,
                                           bpType);
 
@@ -490,7 +494,7 @@ void AgentProcessPacket(HwDbgAgent::AgentContext* pActiveContext,
             break;
 
         case HSAIL_COMMAND_CREATE_BREAKPOINT:
-            DBECreateBreakpoint(pActiveContext, packet);
+            CreateBreakpointPacket(pActiveContext, packet);
             break;
 
         case HSAIL_COMMAND_DISABLE_BREAKPOINT:

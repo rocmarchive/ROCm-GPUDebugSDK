@@ -71,7 +71,7 @@ HSAResourceManager::~HSAResourceManager()
 
 }
 
-bool HSAResourceManager::InitRuntime(bool verbosePrint)
+bool HSAResourceManager::InitRuntime(bool verbosePrint, unsigned int gpuIndex)
 {
     bool ret = true;
 
@@ -120,8 +120,17 @@ bool HSAResourceManager::InitRuntime(bool verbosePrint)
             return false;
         }
 
+        // Choose the specified GPU agent
+        if (gpuIndex < agentList.m_vecGPU.size())
+        {
+            ms_gpu = agentList.m_vecGPU[gpuIndex];
+        }
+        else
+        {
+            ms_gpu = agentList.m_vecGPU[0];
+        }
+
         // Choose the first agent from the agent vector.
-        ms_gpu = agentList.m_vecGPU[0];
         ms_cpu = agentList.m_vecCPU[0];
 
         // Find all memory region
@@ -600,7 +609,7 @@ bool HSAResourceManager::Finalize(const void*              pBRIG,
 bool HSAResourceManager::CopyKernelDispatchPacket(
     const hsa_kernel_dispatch_packet_t& aqlPacket,
     const bool                          bCopySignal,
-    hsa_kernel_dispatch_packet_t& aqlPacketOut) const
+    hsa_kernel_dispatch_packet_t& aqlPacketOut)
 {
     if (nullptr == memcpy(&aqlPacketOut, &aqlPacket, sizeof(hsa_kernel_dispatch_packet_t)))
     {
@@ -608,9 +617,67 @@ bool HSAResourceManager::CopyKernelDispatchPacket(
         return false;
     }
 
+    m_aqlInfos[&aqlPacketOut].m_completionSignal = m_aqlInfos[&aqlPacket].m_completionSignal;
+    m_aqlInfos[&aqlPacketOut].m_executable = m_aqlInfos[&aqlPacket].m_executable;
+    m_aqlInfos[&aqlPacketOut].m_codeObj = m_aqlInfos[&aqlPacket].m_codeObj;
+
     if (!bCopySignal)
     {
         aqlPacketOut.completion_signal.handle = 0;
+        m_aqlInfos[&aqlPacketOut].m_completionSignal.handle = 0;
+    }
+
+    const HSAKernelArgBuffer& origBuff = m_aqlInfos[&aqlPacket].m_kernArgBuffer;
+    if (origBuff.GetArgBufferPointer() != nullptr && origBuff.GetBufferSize() != 0)
+    {
+        bool ret = m_aqlInfos[&aqlPacketOut].m_kernArgBuffer.AllocateBuffer(origBuff.GetBufferSize(), origBuff.GetStartOffset());
+        if (!ret)
+        {
+            std::cerr << "Error in HSAResourceManager::CopyKernelDispatchPacket(): Allocating kernel arg buffer fail.\n";
+            return false;
+        }
+
+        aqlPacketOut.kernarg_address = m_aqlInfos[&aqlPacketOut].m_kernArgBuffer.GetArgBufferPointer();
+    }
+
+    return true;
+}
+
+bool HSAResourceManager::CopyKernelDispatchPacket(
+    const hsa_kernel_dispatch_packet_t& aqlPacket,
+          hsa_kernel_dispatch_packet_t  aqlPacketOut,
+    const bool                          bCopySignal,
+    const bool                          bCopyKernArgAddr)
+{
+    if (nullptr == memcpy(&aqlPacketOut, &aqlPacket, sizeof(hsa_kernel_dispatch_packet_t)))
+    {
+        std::cerr << "Error in HSAResourceManager::CopyKernelDispatchPacket(): memcpy() fail.\n";
+        return false;
+    }
+
+    m_aqlInfos[&aqlPacketOut].m_completionSignal = m_aqlInfos[&aqlPacket].m_completionSignal;
+    m_aqlInfos[&aqlPacketOut].m_executable = m_aqlInfos[&aqlPacket].m_executable;
+    m_aqlInfos[&aqlPacketOut].m_codeObj = m_aqlInfos[&aqlPacket].m_codeObj;
+
+    if (!bCopySignal)
+    {
+        aqlPacketOut.completion_signal.handle = 0;
+    }
+    else
+    {
+        m_aqlInfos[&aqlPacketOut].m_completionSignal = m_aqlInfos[&aqlPacket].m_completionSignal;
+    }
+
+    if (!bCopyKernArgAddr)
+    {
+        const HSAKernelArgBuffer& origBuff = m_aqlInfos[&aqlPacket].m_kernArgBuffer;
+        bool ret = m_aqlInfos[&aqlPacketOut].m_kernArgBuffer.AllocateBuffer(origBuff.GetBufferSize(), origBuff.GetStartOffset());
+        if (!ret)
+        {
+            std::cerr << "Error in HSAResourceManager::CopyKernelDispatchPacket(): Allocating kernel arg buffer fail.\n";
+            return false;
+        }
+        aqlPacketOut.kernarg_address = m_aqlInfos[&aqlPacketOut].m_kernArgBuffer.GetArgBufferPointer();
     }
 
     return true;
@@ -824,7 +891,7 @@ bool HSAResourceManager::CleanUp()
 
     m_signals.clear();
 
-    for (std::unordered_map<hsa_kernel_dispatch_packet_t*, AQLInfo>::iterator iter = m_aqlInfos.begin();
+    for (std::unordered_map<const hsa_kernel_dispatch_packet_t*, AQLInfo>::iterator iter = m_aqlInfos.begin();
          iter != m_aqlInfos.end(); ++iter)
     {
         iter->second.m_kernArgBuffer.DestroyBuffer();
@@ -1022,7 +1089,8 @@ bool InitAQL(hsa_kernel_dispatch_packet_t& aqlPacketOut)
 HSAKernelArgBuffer::HSAKernelArgBuffer() :
     m_pArgBuffer(nullptr),
     m_argBufferSize(0),
-    m_location(0)
+    m_location(0),
+    m_startOffset(0)
 {
 }
 
@@ -1051,6 +1119,7 @@ bool HSAKernelArgBuffer::AllocateBuffer(
         // They are the OpenCL compiler generated offsets, can be zero.
         m_location += offsetSize;
         memset(m_pArgBuffer, static_cast<int>(clearedValue), m_argBufferSize);
+        m_startOffset = offsetSize;
     }
     else
     {
@@ -1067,6 +1136,7 @@ bool HSAKernelArgBuffer::DestroyBuffer()
     m_pArgBuffer = nullptr;
     m_argBufferSize = 0;
     m_location = 0;
+    m_startOffset = 0;
     return ret;
 }
 
@@ -1100,6 +1170,17 @@ void* HSAKernelArgBuffer::GetArgBufferPointer() const
 {
     return m_pArgBuffer;
 }
+
+size_t HSAKernelArgBuffer::GetBufferSize() const
+{
+    return m_argBufferSize;
+}
+
+size_t HSAKernelArgBuffer::GetStartOffset() const
+{
+    return m_startOffset;
+}
+
 // ----------------- End of Definitions of HSAKernelArgBuffer ------------------
 
 /// \brief Output device type as string

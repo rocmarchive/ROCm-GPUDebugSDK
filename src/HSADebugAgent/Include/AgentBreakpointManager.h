@@ -12,7 +12,9 @@
 #include <vector>
 #include <sstream>
 
+#include "hsa.h"
 #include "AMDGPUDebug.h"
+
 #include "AgentBreakpoint.h"
 #include "CommunicationControl.h"
 
@@ -52,6 +54,12 @@ private:
 
     /// Max size for the momentary breakpoints shared memory location
     size_t m_momentaryBPShmMaxSize;
+
+    /// Check for duplicate source and function breakpoints
+    /// \return true if any duplicates present
+    bool IsDuplicatesPresent(const HwDbgContextHandle  DbeContextHandle,
+                             const HsailCommandPacket& ipPacket,
+                             const HsailBkptType       ipType);
 
     /// Called internally when we need a new temp breakpoint
     GdbBkptId CreateNewTempBreakpointId();
@@ -104,9 +112,10 @@ public:
     /// \param[in] dbeHandle    The active debug context's handle
     /// \param[in] ipPacket     The packet obtained from GDB
     /// \param[in] ipType       The breakpoint type requested
-    HsailAgentStatus CreateBreakpoint(const HwDbgContextHandle dbeHandle,
-                                      const HsailCommandPacket ipPacket,
-                                      const HsailBkptType ipType);
+    HsailAgentStatus CreateBreakpoint(const HwDbgContextHandle            dbeHandle,
+                                      const hsa_kernel_dispatch_packet_t* pAqlPacket,
+                                      const HsailCommandPacket            ipPacket,
+                                      const HsailBkptType                 ipType);
 
     /// Take in the context and an input packet and delete the breakpoint
     /// \param[in] dbeHandle The active debug context's handle

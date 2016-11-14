@@ -3,7 +3,7 @@
 //
 /// \author AMD Developer Tools
 /// \file
-/// \brief Description: A simple test of a C interface to HwDbgFacilities
+/// \brief Description: A C interface to HwDbgFacilities
 //==============================================================================
 // C / C++:
 #include <cassert>
@@ -17,6 +17,7 @@
 #include <DbgInfoDwarfParser.h>
 #include <DbgInfoConsumerImpl.h>
 #include <DbgInfoCompoundConsumer.h>
+#include <DbgInfoLogging.h>
 #include <FacilitiesInterface.h>
 
 #define HWDBGFAC_INTERFACE_DUMMY_FILE_PATH "src1.hsail"
@@ -352,6 +353,7 @@ HwDbgInfo_debug hwdbginfo_init_and_identify_binary(const void* bin, size_t bin_s
 // Initialize a HwDbgInfo_debug from a single level ELF/DWARF binary:
 HwDbgInfo_debug hwdbginfo_init_with_single_level_binary(const void* bin, size_t bin_size, HwDbgInfo_err* err)
 {
+
     // Validate input:
     if (nullptr == bin || 0 == bin_size)
     {
@@ -371,6 +373,42 @@ HwDbgInfo_debug hwdbginfo_init_with_single_level_binary(const void* bin, size_t 
 
     // Parse:
     bool retVal = DbgInfoDwarfParser::InitializeWithBinary(olBin, dbg->ol_sc, dbg->ol_lm);
+
+    // for each scope
+    for(int i=0; i < dbg->ol_sc.m_children.size(); i++)
+    {
+        DBGINFO_LOG( "===========Scope # " << i << "============\n");
+        // For each address within the scope
+        for (int k=0; k< dbg->ol_sc.m_children[i]->m_scopeAddressRanges.size(); k++)
+        {
+            DBGINFO_LOG( "\t"
+                      << std::hex
+                      << "Low PC: 0x" << dbg->ol_sc.m_children[i]->m_scopeAddressRanges[k].m_minAddr << "\t"
+                      << "High PC: 0x" << dbg->ol_sc.m_children[i]->m_scopeAddressRanges[k].m_maxAddr << "\t"
+                      << "Name: \"" << dbg->ol_sc.m_children[i]->m_scopeName << "\""
+                      << std::dec
+                      << "\n");
+        }
+
+        // for all vars in that scope
+        for (int j=0;j< dbg->ol_sc.m_children[i]->m_scopeVars.size(); j++)
+        {
+            if (dbg->ol_sc.m_children[i]->m_scopeVars[j]->m_varName.empty())
+            {
+                DBGINFO_LOG("EMPTY Name: \t");
+            }
+            else
+            {
+                DBGINFO_LOG("Var Name: \"" << dbg->ol_sc.m_children[i]->m_scopeVars[j]->m_varName << "\"\t");
+            }
+
+            DBGINFO_LOG( "Type Name: \"" << dbg->ol_sc.m_children[i]->m_scopeVars[j]->m_typeName << "\"\t"
+                        << std::hex
+                        << "LowPC: 0x" << dbg->ol_sc.m_children[i]->m_scopeVars[j]->m_lowVariablePC << "\t"
+                        << "HighPC: 0x" << dbg->ol_sc.m_children[i]->m_scopeVars[j]->m_highVariablePC << "\n"
+                        << std::dec);
+        }
+    }
 
     if (!retVal)
     {
@@ -1422,9 +1460,6 @@ HwDbgInfo_variable hwdbginfo_variable(HwDbgInfo_debug dbg, HwDbgInfo_addr start_
         HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_OUTOFMEMORY);
     }
 
-    // Add the variable to the allocated variables list:
-    pDbg->AddVariable(pVar);
-
     // Query the debug info:
     bool rc = pDbg->m_cn->GetVariableInfoInCurrentScope(start_addr, var_name, *pVar);
 
@@ -1433,6 +1468,9 @@ HwDbgInfo_variable hwdbginfo_variable(HwDbgInfo_debug dbg, HwDbgInfo_addr start_
         delete pVar;
         HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_NOTFOUND);
     }
+
+    // Add the variable to the allocated variables list:
+    pDbg->AddVariable(pVar);
 
     if (nullptr != err)
     {
@@ -1472,9 +1510,6 @@ HwDbgInfo_variable hwdbginfo_low_level_variable(HwDbgInfo_debug dbg, HwDbgInfo_a
         HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_OUTOFMEMORY);
     }
 
-    // Add the variable to the allocated variables list:
-    pDbg->AddVariable(pVar);
-
     // Query the debug info:
     bool rc = pTLDbg->ll_cn->GetVariableInfoInCurrentScope(start_addr, var_name, *pVar);
 
@@ -1483,6 +1518,9 @@ HwDbgInfo_variable hwdbginfo_low_level_variable(HwDbgInfo_debug dbg, HwDbgInfo_a
         delete pVar;
         HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_NOTFOUND);
     }
+
+    // Add the variable to the allocated variables list:
+    pDbg->AddVariable(pVar);
 
     if (nullptr != err)
     {
@@ -1506,6 +1544,7 @@ HwDbgInfo_err hwdbginfo_frame_variables(HwDbgInfo_debug dbg, HwDbgInfo_addr star
     HWDBGFAC_INTERFACE_VALIDATE_OUTPUT_BUFFER(buf_len, vars);
 
     // Query the debug info:
+    // Get a vector of all available variable names from a PC
     std::vector<std::string> varNames;
     bool rc = pDbg->m_cn->ListVariablesFromAddress(start_addr, stack_depth, leaf_members, varNames);
 

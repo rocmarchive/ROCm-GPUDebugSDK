@@ -240,13 +240,13 @@ void RunTest(bool doVerify)
         // Validate
         std::cout << "Validating...\n";
         bool valid = true;
-        int failIndex = 0;
+        uint32_t failIndex = 0;
 
         for (size_t i = 0; i < referenceData.size(); ++i)
         {
             if (fabs(pBufferC[i] - referenceData[i]) > 1e-3f)
             {
-                failIndex = i;
+                failIndex = static_cast<uint32_t>(i);
                 valid = false;
                 break;
             }

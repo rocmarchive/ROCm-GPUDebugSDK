@@ -78,9 +78,9 @@ extern "C" {
 /** The AMD GPU Debug API major version. */
 #define AMDGPUDEBUG_VERSION_MAJOR 1
 /** The AMD GPU Debug API minor version. */
-#define AMDGPUDEBUG_VERSION_MINOR 3
+#define AMDGPUDEBUG_VERSION_MINOR 4
 /** The AMD GPU Debug API build number. */
-#define AMDGPUDEBUG_VERSION_BUILD 5
+#define AMDGPUDEBUG_VERSION_BUILD 43
 
 /** The maximum number of lanes in a wavefront for the GPU device. */
 #define HWDBG_WAVEFRONT_SIZE 64
@@ -194,6 +194,24 @@ typedef enum
     HWDBG_DATABREAKPOINT_MODE_ALL     = 0x7,
 } HwDbgDataBreakpointMode;
 
+/** The list of code object storage types supported by the loader. */
+typedef enum
+{
+    /**
+     * Loaded memory segment is not backed by any code object (anonymous), as the
+     * case would be with BSS (uninitialized data). */
+    HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE = 0,
+
+    /**
+     * Loaded memory segment is backed by the code object that is stored in the
+     * file. */
+    HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_FILE = 1,
+
+    /**
+     * Loaded memory segment is backed by the code object that is stored in the
+     * memory. */
+    HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY = 2
+} HwDbgLoaderCodeObjectStorageType;
 
 /************************************ TYPEDEFS **********************************/
 
@@ -237,6 +255,55 @@ typedef struct
     /** the memory address to be watched */
     void*                   pAddress;
 } HwDbgDataBreakpointInfo;
+
+/** A structure to hold information related to each loaded segment. */
+typedef struct
+{
+    /** Device underlying memory segment is allocated on. If the code object that is
+     ** backing underlying memory segment is program code object, then 0. */
+    uint64_t device;
+
+    /** Executable that is managing this underlying memory segment. */
+    uint64_t executable;
+
+    /** Storage type of the code object that is backing underlying memory segment. */
+    HwDbgLoaderCodeObjectStorageType codeObjectStorageType;
+
+    /** If the storage type of the code object that is backing underlying memory
+     ** segment is:
+     **   - HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE, then null;
+     **   - HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_FILE, then null-terminated
+     **     filepath to the code object;
+     **   - HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY, then host
+     **     accessible pointer to the first byte of the code object.*/
+    const void *pCodeObjectStorageBase;
+
+    /**
+     ** If the storage type of the code object that is backing underlying memory
+     ** segment is:
+     **   - HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE, then 0;
+     **   - HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_FILE, then the length of
+     **     the filepath to the code object (including null-terminating character);
+     **   - HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY, then the size, in
+     **     bytes, of the memory occupied by the code object.*/
+    size_t codeObjectStorageSize;
+
+    /**
+     ** If the storage type of the code object that is backing underlying memory
+     ** segment is:
+     **   - HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE, then 0;
+     **   - other, then offset, in bytes, from the beginning of the code object to
+     **     the first byte in the code object data is copied from. */
+    size_t codeObjectStorageOffset;
+
+    /** Starting address of the underlying memory segment. */
+    const void *pSegmentBase;
+
+    /** Size, in bytes, of the underlying memory segment. */
+    size_t segmentSize;
+
+} HwDbgLoaderSegmentDescriptor;
+
 
 /** A structure to hold the active wave info returned by HwDbgGetActiveWavefronts API */
 typedef struct
@@ -444,6 +511,7 @@ HwDbgShutDown();
 **
 ** \return HwDbgStatus
 ** \retval HWDBG_STATUS_SUCCESS             On success
+** \retval HWDBG_STATUS_DEVICE_ERROR        If the device does not support debugging
 ** \retval HWDBG_STATUS_ERROR               If an internal error occurs
 **                                           (check the log output for details)
 ** \retval HWDBG_STATUS_NOT_INITIALIZED     If called prior to a HwDbgInit call
@@ -720,6 +788,30 @@ HwDbgGetKernelBinary(const HwDbgContextHandle hDebugContext,
 extern HWDBG_API_ENTRY HwDbgStatus HWDBG_API_CALL
 HwDbgGetDispatchedKernelName(const HwDbgContextHandle hDebugContext,
                              const char**             ppKernelNameOut);
+
+
+/************************************************************************************//**
+** Query the loaded memory segment descriptors, or the total number of loaded memory
+** segment descriptors. If pSegmentDescriptorListOut is nullptr, then the segment count
+** is returned. This function is intended to be called twice, once to get the number
+** of loaded segments and once to populate the segments.
+**
+** \param[out] pSegmentDescriptorListOut  Application managed buffer, returns a list of the
+**                                        loaded segments
+** \param[out] pSegmentDescriptorCountOut Application managed buffer, returns the number
+**                                        of loaded segments
+**
+** \return HwDbgStatus
+** \retval HWDBG_STATUS_SUCCESS           On success
+** \retval HWDBG_STATUS_ERROR             If an internal error occurs
+**                                        (check the log output for details)
+** \retval HWDBG_STATUS_INVALID_PARAMETER If both input parameters are null
+** \retval HWDBG_STATUS_NOT_INITIALIZED   If called prior to a HwDbgInit call
+** \retval HWDBG_STATUS_UNSUPPORTED       If the functionality is not supported
+****************************************************************************************/
+extern HWDBG_API_ENTRY HwDbgStatus HWDBG_API_CALL
+HwDbgGetLoadedSegmentDescriptors(HwDbgLoaderSegmentDescriptor*  pSegmentDescriptorListOut,
+                                 size_t*                        pSegmentDescriptorCountOut);
 
 
 /****************************** GPU DEVICE STATE INSPECTION ****************************/

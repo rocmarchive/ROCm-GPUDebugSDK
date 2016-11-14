@@ -263,6 +263,12 @@ std::string GetHsaStatusString(const hsa_status_t s)
     return str;
 }
 
+bool AgentIsFileExists(const char *fileName)
+{
+    std::ifstream infile(fileName);
+    return infile.good();
+}
+
 
 HsailAgentStatus AgentDeleteFile(const char* ipFilename)
 {

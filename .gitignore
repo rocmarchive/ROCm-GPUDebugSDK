@@ -1,0 +1,7 @@
+*.o
+*~
+.project
+.cproject
+.settings
+libAMDHSADebugAgent-x64.so
+libAMDHSADebugAgent-x64-d.so

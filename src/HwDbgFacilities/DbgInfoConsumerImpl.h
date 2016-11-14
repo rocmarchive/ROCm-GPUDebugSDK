@@ -543,13 +543,17 @@ bool DbgInfoConsumerImpl<AddrType, LineType, VarLocationType>::GetMatchingVariab
 /// \return Success / failure.
 /// ---------------------------------------------------------------------------
 template<typename AddrType, typename LineType, typename VarLocationType>
-bool DbgInfoConsumerImpl<AddrType, LineType, VarLocationType>::ListVariablesFromAddress(const AddrType& addr, int stackFrameDepth, bool finalMembers, std::vector<std::string>& o_variableNames) const
+bool DbgInfoConsumerImpl<AddrType, LineType, VarLocationType>::ListVariablesFromAddress(
+                                                                    const AddrType& addr,
+                                                                          int       stackFrameDepth,
+                                                                          bool      finalMembers,
+                                                                          std::vector<std::string>& o_variableNames) const
 {
     bool retVal = false;
 
     if (m_pTopCodeScope != nullptr)
     {
-        // Get the address's scope:
+        // Get the address's smallest possible scope:
         const ConsumedCodeScope* pAddrScope = m_pTopCodeScope->FindSmallestScopeContainingAddress(addr);
 
         if (pAddrScope != nullptr)
@@ -560,18 +564,25 @@ bool DbgInfoConsumerImpl<AddrType, LineType, VarLocationType>::ListVariablesFrom
             int totalStackDepth = m_pTopCodeScope->GetStackDepth(addr);
 
             // Go up in the hierarchy, adding all variables in each scope:
+            //
+            // pCurrentScope is the loop iterator for the while, we keep
+            // getting each larger scopes with each iteration of this while loop
             const ConsumedCodeScope* pCurrentScope = pAddrScope;
 
             while (pCurrentScope != nullptr)
             {
                 // Get the variables vector:
-                const std::vector<ConsumedVariableInfo*>& currentScopeVariables = pCurrentScope->m_scopeVars;
+                const std::vector<ConsumedVariableInfo*>& currentScopeVariables =
+                                                                pCurrentScope->m_scopeVars;
 
                 // We add the variables in three cases:
                 // 1. The parameter is -1, signifying the caller wants all the locals from all levels.
                 // 2. This is the requested scope
                 // 3. This is the global scope (outside the kernel)
-                if ((stackFrameDepth == -1) || (stackFrameDepth == currentStackDepth) || (currentStackDepth == totalStackDepth))
+                bool isVariablesAdded = (stackFrameDepth == -1) ||
+                                        (stackFrameDepth == currentStackDepth) ||
+                                        (currentStackDepth == totalStackDepth);
+                if (isVariablesAdded)
                 {
                     // Get all the variables:
                     int numberOfVariables = (int)currentScopeVariables.size();
@@ -590,7 +601,9 @@ bool DbgInfoConsumerImpl<AddrType, LineType, VarLocationType>::ListVariablesFrom
                                 if (finalMembers)
                                 {
                                     // Add any leaves to the vector:
-                                    addLeafMemberNamesToVector(*pCurrentVariable, pCurrentVariable->m_varName, o_variableNames);
+                                    addLeafMemberNamesToVector(*pCurrentVariable,
+                                                               pCurrentVariable->m_varName,
+                                                               o_variableNames);
                                 }
                                 else // !finalMembers
                                 {

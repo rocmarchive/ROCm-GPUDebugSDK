@@ -18,6 +18,7 @@
 #include "AgentLogging.h"
 #include "AgentNotifyGdb.h"
 #include "AgentProcessPacket.h"
+#include "AgentSegmentLoader.h"
 #include "AgentUtils.h"
 #include "CommandLoop.h"
 
@@ -138,6 +139,10 @@ void PreDispatchCallback(const hsa_dispatch_callback_t* pRTParam, void* pUserArg
     status = AgentNotifyPredispatchState(HSAIL_PREDISPATCH_ENTERED_PREDISPATCH);
     PredispatchCheckStatus(status, "Error notifying predispatch state!");
 
+    AgentSegmentLoader segmentLoader(pAqlPacket);
+    segmentLoader.UpdateLoadedSegments();
+    PredispatchCheckStatus(status, "Error in Getting Loadmap");
+
     status = pBinary->PopulateBinaryFromDBE(pActiveContext->GetActiveHwDebugContext(), pAqlPacket);
     PredispatchCheckStatus(status, "Error in Populating Binary");
 
@@ -151,11 +156,10 @@ void PreDispatchCallback(const hsa_dispatch_callback_t* pRTParam, void* pUserArg
 
     // We notify gdb since this is a new binary, we still don't know
     // if we will use it for kernel debugging yet though.
-    // This is because we dont know if there are any kernel breakpoints set yet
+    // This is because we don't know if there are any kernel breakpoints set yet
     status = pBinary->NotifyGDB(pAqlPacket,
                                 pRTParam->queue->id,
                                 pRTParam->packet_id);
-
     PredispatchCheckStatus(status, "Error in notifying GDB!");
 
     AGENT_LOG("PredispatchCallback: Check for Function breakpoints");

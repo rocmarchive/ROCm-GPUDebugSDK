@@ -6,6 +6,7 @@
 /// \brief The breakpoint class
 //==============================================================================
 // Use some stl vectors for maintaining breakpoint handles
+#include <algorithm>
 #include <vector>
 
 #include "AgentBreakpoint.h"
@@ -168,18 +169,33 @@ HsailAgentStatus AgentBreakpoint::CreateBreakpointDBE(const HwDbgContextHandle d
     // If no other GDB ID existed or the ID was not specified, we need to create in DB
     bool isBreakpointNeededInDBE = m_GdbId.empty() || gdbID == g_UNKOWN_GDB_BKPT_ID ;
 
-    // We need to enqueue  a breakpoint for this GDB id
+    // We need to enqueue  a GDB id for this breakpoint
     if (gdbID != g_UNKOWN_GDB_BKPT_ID)
     {
-        m_GdbId.push_back(gdbID);
+        std::vector<GdbBkptId>::iterator it;
+        it = find (m_GdbId.begin(), m_GdbId.end(), gdbID);
+        if (it == m_GdbId.end())
+        {
+            m_GdbId.push_back(gdbID);
+        }
+    }
+
+    if (m_handle != nullptr)
+    {
+        // Get the location where the breakpoint presently is
+        HwDbgCodeAddress presentPC;
+        HwDbgStatus dbeStatus = HwDbgGetCodeBreakpointAddress(dbeHandle, m_handle, &presentPC);
+        if (dbeStatus == HWDBG_STATUS_SUCCESS &&
+            presentPC != m_pc)
+        {
+            isBreakpointNeededInDBE = true;
+        }
     }
 
     if (isBreakpointNeededInDBE)
     {
-        // This breakpoint should be in state disabled
-        HwDbgStatus dbeStatus = HwDbgCreateCodeBreakpoint(dbeHandle,
-                                                          m_pc,
-                                                          &m_handle);
+        // This breakpoint should be in state enabled (if created successfully)
+        HwDbgStatus dbeStatus = HwDbgCreateCodeBreakpoint(dbeHandle, m_pc, &m_handle);
 
         if (dbeStatus != HWDBG_STATUS_SUCCESS)
         {

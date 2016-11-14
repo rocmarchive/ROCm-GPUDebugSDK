@@ -107,6 +107,11 @@ bool AgentConfiguration::ReadDefaultConfiguration()
     m_configMap[HSAIL_DEBUG_CONFIG_WAVE_INFO_SHM].param.shmemParam.m_shmKey = g_WAVE_BUFFER_SHMKEY;
     m_configMap[HSAIL_DEBUG_CONFIG_WAVE_INFO_SHM].param.shmemParam.m_maxSize = g_WAVE_BUFFER_MAXSIZE;
 
+    m_configMap[HSAIL_DEBUG_CONFIG_LOADMAP_BUFFER_SHM].paramType = HSAIL_DEBUG_CONFIG_LOADMAP_BUFFER_SHM;
+    m_configMap[HSAIL_DEBUG_CONFIG_LOADMAP_BUFFER_SHM].param.shmemParam.m_shmKey = g_LOADMAP_SHMKEY;
+    m_configMap[HSAIL_DEBUG_CONFIG_LOADMAP_BUFFER_SHM].param.shmemParam.m_maxSize = g_LOADMAP_MAXSIZE;
+
+
     retCode = true;
 
     // For each parameter, check that it is unique

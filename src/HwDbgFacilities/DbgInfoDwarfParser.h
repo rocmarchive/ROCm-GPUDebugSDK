@@ -215,6 +215,8 @@ private:
     static void FillScopeHsaData(Dwarf_Die programDIE, Dwarf_Debug pDwarf, DwarfCodeScope& o_scope);
     /// Fills the FrameBase - which is the base variable location of the scope - from DWARF
     static void FillFrameBase(Dwarf_Die programDIE, Dwarf_Debug pDwarf, DwarfCodeScope& o_scope);
+    /// Fill the scope data from the referenced DIE.
+    static void FillCodeScopeFromDwarfRef(Dwarf_Die programDIE, const std::string& firstSourceFileRealPath, Dwarf_Debug pDwarf, DwarfCodeScope& o_scope);
     /// In case this is an inlined function, fill the Inlined data which is the line in which the function is defined, from DWARF
     static void FillInlinedFunctionData(Dwarf_Die programDIE, const std::string& firstSourceFileRealPath, Dwarf_Debug pDwarf, DwarfCodeScope& o_scope);
     /// Fills the child scopes recursively

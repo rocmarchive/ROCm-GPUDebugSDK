@@ -85,8 +85,6 @@ static HSADebuggerRTLoader* psDebuggerRTLoader = nullptr;
 // We will delete the AgentContext object on unload
 static HwDbgAgent::AgentContext* psAgentContext = nullptr;
 
-static HwDbgAgent::AgentISABufferManager* psActiveISABufferManager = nullptr;
-
 static HwDbgAgent::AgentConfiguration* psActiveAgentConfig = nullptr;
 
 static void InitAgentContext();
@@ -118,20 +116,6 @@ static void CreateHsaAgentContext()
     psAgentContext = new(std::nothrow) HwDbgAgent::AgentContext;
 
     if (psAgentContext == nullptr)
-    {
-        AGENT_ERROR("Could not create a AgentContext for debug");
-        AgentFatalExit();
-    }
-
-    if (psActiveISABufferManager != nullptr)
-    {
-        AGENT_ERROR("Cannot reinitialize the ISA buffer manager");
-        AgentFatalExit();
-    }
-
-    psActiveISABufferManager = new(std::nothrow) HwDbgAgent::AgentISABufferManager;
-
-    if (psActiveISABufferManager == nullptr)
     {
         AGENT_ERROR("Could not create a AgentContext for debug");
         AgentFatalExit();
@@ -280,17 +264,6 @@ static void DeleteHsaAgentContext()
             AGENT_ERROR("Could not delete AgentContext");
         }
 
-        if (psActiveISABufferManager != nullptr)
-        {
-            delete psActiveISABufferManager;
-            psActiveISABufferManager = nullptr;
-        }
-        else
-        {
-            AGENT_ERROR("Could not delete AgentISABufferManager");
-        }
-
-
         g_bCleanUp = true;
         g_bInit = false;
     }
@@ -362,16 +335,6 @@ static HsailAgentStatus AgentCheckVersion(uint64_t runtimeVersion, uint64_t fail
     }
 
     return status;
-}
-
-HwDbgAgent::AgentISABufferManager* GetActiveISABufferManager()
-{
-    if (psActiveISABufferManager == NULL)
-    {
-        AGENT_LOG("Returning a NULL psActiveISABufferManager");
-    }
-
-    return psActiveISABufferManager;
 }
 
 HwDbgAgent::AgentConfiguration* GetActiveAgentConfig()

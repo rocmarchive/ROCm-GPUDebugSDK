@@ -16,12 +16,9 @@ void ShutDownHsaAgentContext(const bool skipDbeShutDown);
 
 namespace HwDbgAgent
 {
-class AgentISABufferManager;
 
 class AgentConfiguration;
 }
-
-HwDbgAgent::AgentISABufferManager* GetActiveISABufferManager();
 
 HwDbgAgent::AgentConfiguration* GetActiveAgentConfig();
 

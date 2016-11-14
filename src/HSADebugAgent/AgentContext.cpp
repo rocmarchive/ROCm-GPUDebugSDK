@@ -37,6 +37,8 @@ AgentContext::AgentContext():
     m_ParentPID(getppid()),
     m_codeObjBufferShmKey(-1),
     m_codeObjBufferMaxSize(0),
+    m_loadMapBufferShmKey(-1),
+    m_loadMapBufferMaxSize(0),
     m_ReadyToContinue(false),
     m_workGroupSize(gs_UNKNOWN_HWDBGDIM3),
     m_gridSize(gs_UNKNOWN_HWDBGDIM3),
@@ -58,32 +60,55 @@ AgentContext::AgentContext():
         AGENT_ERROR("Could not get shared mem max size");
     }
 
+    status = GetActiveAgentConfig()->GetConfigShmKey(HSAIL_DEBUG_CONFIG_LOADMAP_BUFFER_SHM, m_loadMapBufferShmKey);
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("Could not get shared mem key");
+    }
+
+    status = GetActiveAgentConfig()->GetConfigShmSize(HSAIL_DEBUG_CONFIG_LOADMAP_BUFFER_SHM, m_loadMapBufferMaxSize);
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("Could not get shared mem max size");
+    }
 
     AGENT_LOG("Constructor Agent Context");
 }
 
 
-HsailAgentStatus AgentContext::AllocateBinarySharedMemBuffer()
+HsailAgentStatus AgentContext::AllocateBinaryandLoadMapSharedMem()
 {
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
     status = AgentAllocSharedMemBuffer(m_codeObjBufferShmKey, m_codeObjBufferMaxSize);
     if (status != HSAIL_AGENT_STATUS_SUCCESS)
     {
-        AGENT_ERROR("AllocateBinarySharedMemBuffer: Could not alloc shared memory");
+        AGENT_ERROR("AllocateBinarySharedMemBuffer: Could not alloc shared memory for codeobj");
+        return status;
+    }
+
+    status = AgentAllocSharedMemBuffer(m_loadMapBufferShmKey, m_loadMapBufferMaxSize);
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("AllocateBinarySharedMemBuffer: Could not alloc shared memory for loadmap");
     }
 
     return status;
 }
 
 //! Private function to initialize the shared memory buffer for the binary
-HsailAgentStatus AgentContext::FreeBinarySharedMemBuffer()
+HsailAgentStatus AgentContext::FreeBinaryandLoadMapSharedMem()
 {
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
     status = AgentFreeSharedMemBuffer(m_codeObjBufferShmKey, m_codeObjBufferMaxSize);
-
     if (status != HSAIL_AGENT_STATUS_SUCCESS)
     {
-        AGENT_ERROR("FreeBinarySharedMemBuffer: Could not free binary shared mem");
+        AGENT_ERROR("FreeBinarySharedMemBuffer: Could not free binary shared mem for codeobj");
+    }
+
+    status = AgentFreeSharedMemBuffer(m_loadMapBufferShmKey, m_loadMapBufferMaxSize);
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("FreeBinarySharedMemBuffer: Could not free binary shared mem for loadmap");
     }
 
     return status;
@@ -513,6 +538,13 @@ const HwDbgContextHandle AgentContext::GetActiveHwDebugContext() const
     return m_DebugContextHandle;
 }
 
+const hsa_kernel_dispatch_packet_t* AgentContext::GetDispatchedAQLPacket() const
+{
+    hsa_kernel_dispatch_packet_t* packet =
+            reinterpret_cast<hsa_kernel_dispatch_packet_t*>( m_HwDebugState.pPacket);
+    return packet;
+}
+
 // This is used by all the calling functions to create and delete breakpoints
 AgentBreakpointManager* AgentContext::GetBpManager() const
 {
@@ -547,7 +579,6 @@ AgentFocusWaveControl* AgentContext::GetFocusWaveControl() const
     return m_pFocusWaveControl;
 }
 
-
 // Called once the object has been created
 // Explicitly done rather than moving this into the constructor since we want to be sure
 // We will also initialize the breakpoint manager in this case
@@ -568,7 +599,13 @@ HsailAgentStatus AgentContext::Initialize()
         return status;
     }
 
-    status =  AllocateBinarySharedMemBuffer();
+    status =  AllocateBinaryandLoadMapSharedMem();
+
+    if (status != HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_ERROR("Could not allocate the shared memory for the DBE binary");
+        return status;
+    }
 
     if (status != HSAIL_AGENT_STATUS_SUCCESS)
     {
@@ -810,7 +847,7 @@ HsailAgentStatus AgentContext::ShutDown(const bool skipDbeShutDown)
     m_DebugContextHandle = nullptr;
 
     // Free the shared memory for the binaries
-    status = FreeBinarySharedMemBuffer();
+    status = FreeBinaryandLoadMapSharedMem();
 
     if (status != HSAIL_AGENT_STATUS_SUCCESS)
     {

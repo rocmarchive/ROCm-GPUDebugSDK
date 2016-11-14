@@ -11,6 +11,7 @@
 #include <fstream>
 #include <string>
 #include <unistd.h>
+#include <libelf.h>
 
 #include <hsa_ext_amd.h>
 #include "AMDGPUDebug.h"
@@ -515,7 +516,7 @@ void AgentLogAQLPacket(const hsa_kernel_dispatch_packet_t*  pAqlPacket)
               "grid_size_z \t\t"                << pAqlPacket->grid_size_z << "\n" <<
               "private_segment_size \t\t"       << pAqlPacket->private_segment_size << "\n" <<
               "group_segment_size \t\t"         << pAqlPacket->group_segment_size << "\n" <<
-              "kernel_object \t\t"              << pAqlPacket->kernel_object << "\n" <<
+              "kernel_object \t\t"              << std::hex << "0x" << pAqlPacket->kernel_object << std::dec <<"\n" <<
               "kernarg_address \t\t"            << pAqlPacket->kernarg_address << "\n" <<
               "reserved2 \t\t"                  << pAqlPacket->reserved2 << "\n" <<
               "completion_signal.handle \t\t"   << pAqlPacket->completion_signal.handle << "\n" <<
@@ -535,6 +536,58 @@ void AgentLogSetFromConsole(const HsailLogCommand ipCommand)
 }
 
 
+void AgentLogLoadMap(const HsailSegmentDescriptor* pLoadedSegments,
+                     const size_t                  numSegments)
+{
+    if (nullptr == pLoadedSegments || numSegments == 0)
+    {
+        return;
+    }
+
+    std::stringstream loadMapStream;
+    loadMapStream.str("");
+    loadMapStream << "Active Load Map\n";
+
+    // For each of the loaded GPU segments
+    for (size_t i=0; i<numSegments; i++)
+    {
+        switch (pLoadedSegments[i].codeObjectStorageType)
+        {
+            case HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE:
+                loadMapStream << "HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE ";
+                break;
+            case HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_FILE:
+                loadMapStream << "HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_FILE ";
+                break;
+            case HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY:
+                loadMapStream << "HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY ";
+                break;
+            default:
+                loadMapStream << "Unknown code object storage";
+        }
+
+        loadMapStream << "codeObjectStorageBase:"
+                      << std::hex << pLoadedSegments[i].codeObjectStorageBase << std::dec  << "\t" ;
+        loadMapStream << "codeObjectStorageSize: "
+                      << pLoadedSegments[i].codeObjectStorageSize << "\t";
+        loadMapStream << "segmentSize: "
+                      << pLoadedSegments[i].segmentSize << "\t";
+        loadMapStream << "segmentBase: "
+                      << std::hex << pLoadedSegments[i].segmentBase << std::dec << "\t";
+        loadMapStream << "codeObjectStorageOffset: "
+                      << pLoadedSegments[i].codeObjectStorageOffset << "\t";
+        loadMapStream << "segmentBaseElfVA: "
+                      << std::hex << pLoadedSegments[i].segmentBaseElfVA << std::dec << "\t";
+        loadMapStream << "isSegmentExecuted: "
+                      << pLoadedSegments[i].isSegmentExecuted << "\t";
+
+        loadMapStream << "\n";
+    }
+
+
+    AgentLog(loadMapStream.str().c_str());
+
+}
 
 // Write DLL to agent log
 static bool WriteDLLPath(const std::string& dllName)

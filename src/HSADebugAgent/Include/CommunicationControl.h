@@ -73,6 +73,7 @@ typedef enum
     HSAIL_DEBUG_CONFIG_MOMENTARY_BP_SHM,
     HSAIL_DEBUG_CONFIG_WAVE_INFO_SHM,
     HSAIL_DEBUG_CONFIG_ISA_BUFFER_SHM,
+    HSAIL_DEBUG_CONFIG_LOADMAP_BUFFER_SHM,
     HSAIL_DEBUG_CONFIG_FIFO_GDB_TO_AGENT,
     HSAIL_DEBUG_CONFIG_FIFO_AGENT_TO_GDB,
 } HsailDebugConfigParam;
@@ -188,6 +189,80 @@ typedef struct _HsailDispatchPacket {
     uint64_t packet_id;
 
 } HsailDispatchPacket;
+
+
+typedef enum
+{
+    /**
+     * Loaded memory segment is not backed by any code object (anonymous), as the
+     * case would be with BSS (uninitialized data).
+     */
+    HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE = 0,
+    /**
+     * Loaded memory segment is backed by the code object that is stored in the
+     * file.
+     */
+    HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_FILE = 1,
+    /**
+     * Loaded memory segment is backed by the code object that is stored in the
+     * memory.
+     */
+    HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY = 2
+} HsailLoaderCodeObjectStorageType;
+
+
+typedef struct _HsailSegmentDescriptor
+{
+    /** Device underlying memory segment is allocated on. If the code object that is
+     ** backing underlying memory segment is program code object, then 0. */
+    uint64_t device;
+
+    /** Executable that is managing this underlying memory segment. */
+    uint64_t executable;
+
+    /** Storage type of the code object that is backing underlying memory segment. */
+    HsailLoaderCodeObjectStorageType codeObjectStorageType;
+
+    /** If the storage type of the code object that is backing underlying memory
+     ** segment is:
+     **   - HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE, then null;
+     **   - HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_FILE, then null-terminated
+     **     filepath to the code object;
+     **   - HWDBG_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY, then host
+     **     accessible pointer to the first byte of the code object.*/
+    size_t codeObjectStorageBase;
+
+    /**
+     ** If the storage type of the code object that is backing underlying memory
+     ** segment is:
+     **   - HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE, then 0;
+     **   - HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_FILE, then the length of
+     **     the filepath to the code object (including null-terminating character);
+     **   - HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY, then the size, in
+     **     bytes, of the memory occupied by the code object.*/
+    size_t codeObjectStorageSize;
+
+    /**
+     ** If the storage type of the code object that is backing underlying memory
+     ** segment is:
+     **   - HSAIL_LOADER_CODE_OBJECT_STORAGE_TYPE_NONE, then 0;
+     **   - other, then offset, in bytes, from the beginning of the code object to
+     **     the first byte in the code object data is copied from. */
+    size_t codeObjectStorageOffset;
+
+    /** Starting address of the underlying memory segment. */
+    size_t segmentBase;
+
+    /** Size, in bytes, of the underlying memory segment. */
+    size_t segmentSize;
+
+    /** The ELF VA of start of the segment */
+    uint64_t segmentBaseElfVA;
+
+    bool isSegmentExecuted;
+
+} HsailSegmentDescriptor;
+
 
 typedef struct _HsailNotificationPayload
 {

@@ -20,6 +20,8 @@ const int g_MOMENTARY_BP_BUFFER_SHMKEY = 1111;
 
 const int g_ISASTREAM_SHMKEY = 4567;
 
+const int g_LOADMAP_SHMKEY =7890;
+
 const size_t g_MOMENTARY_BP_BUFFER_MAXSIZE = 1024 * 1024 * 20;
 
 const size_t g_BINARY_BUFFER_MAXSIZE = 1024 * 1024 * 10;
@@ -27,6 +29,8 @@ const size_t g_BINARY_BUFFER_MAXSIZE = 1024 * 1024 * 10;
 const size_t g_WAVE_BUFFER_MAXSIZE = 1024 * 1024 * 20;
 
 const size_t g_ISASTREAM_MAXSIZE = 1024 * 1024 * 20;
+
+const size_t g_LOADMAP_MAXSIZE = 1024 * 1024 * 10;
 
 // The names of the Fifos - opened in GDB and the agent
 

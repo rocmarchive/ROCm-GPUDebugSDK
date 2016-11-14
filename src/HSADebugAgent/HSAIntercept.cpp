@@ -215,39 +215,6 @@ HsaDebugAgent_hsa_ext_program_finalize(hsa_ext_program_t            program,
 
 }
 
-hsa_status_t HsaDebugAgent_hsa_executable_load_code_object(
-    hsa_executable_t executable,
-    hsa_agent_t agent,
-    hsa_code_object_t code_object,
-    const char *options)
-{
-    hsa_status_t rtStatus = HSA_STATUS_ERROR;
-    AGENT_LOG("Interception: hsa_executable_load_code_object");
-    AGENT_LOG("IP options " << options);
-
-    rtStatus = g_OrigCoreApiTable.hsa_executable_load_code_object_fn(executable,
-                                                                     agent,
-                                                                     code_object,
-                                                                     options);
-
-    // Presently when we use amdhsacod, we just use the ISA obtained from the code object
-    // We dont need to use the ISA objects cached by the Manager
-
-    // Save the ISA, delete the finalizer generated file
-    //HsailAgentStatus agentStatus = GetActiveISABufferManager()->AppendISABuffer();
-    //
-    //if (agentStatus != HSAIL_AGENT_STATUS_SUCCESS)
-    //{
-    //    AGENT_LOG("hsa_executable_load_code_object: The ISA could not be saved");
-    //}
-
-
-    AGENT_LOG("Interception: Exit hsa_executable_load_code_object");
-
-    return rtStatus;
-
-}
-
 static void UpdateHSAFunctionTable1_0(ApiTable1_0* pCoreTable)
 {
     if (pCoreTable == nullptr)
@@ -259,7 +226,6 @@ static void UpdateHSAFunctionTable1_0(ApiTable1_0* pCoreTable)
 
     pCoreTable->hsa_queue_create_fn = HsaDebugAgent_hsa_queue_create;
     pCoreTable->hsa_shut_down_fn    = HsaDebugAgent_hsa_shut_down;
-    pCoreTable->hsa_executable_load_code_object_fn = HsaDebugAgent_hsa_executable_load_code_object;
 
     pCoreTable->std_exts_->hsa_ext_program_finalize_fn = HsaDebugAgent_hsa_ext_program_finalize;
 }
@@ -414,7 +380,6 @@ static void UpdateHSAFunctionTable(HsaApiTable* pTable)
 
     pTable->core_->hsa_queue_create_fn = HsaDebugAgent_hsa_queue_create;
     pTable->core_->hsa_shut_down_fn    = HsaDebugAgent_hsa_shut_down;
-    pTable->core_->hsa_executable_load_code_object_fn = HsaDebugAgent_hsa_executable_load_code_object;
 
     pTable->finalizer_ext_->hsa_ext_program_finalize_fn = HsaDebugAgent_hsa_ext_program_finalize;
 }

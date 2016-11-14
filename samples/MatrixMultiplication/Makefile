@@ -6,7 +6,7 @@ all: MatrixMul
 SDKINC=../../include/
 
 HSADIR=/opt/rocm/hsa/
-HSAINC=$(HSADIR)include/
+HSAINC=$(HSADIR)include/hsa
 HSALIB=$(HSADIR)lib/
 
 LIBLINE=-L$(HSALIB) -l:libhsa-runtime64.so.1

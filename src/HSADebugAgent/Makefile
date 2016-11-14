@@ -10,7 +10,7 @@ ifeq (${HSAIL_build}, debug)
 endif
 
 HSADIR=/opt/rocm/hsa
-HSAINC=$(HSADIR)/include/
+HSAINC=$(HSADIR)/include/hsa/
 HSALIB=$(HSADIR)/lib/
 
 # To force libelf.a to be included into the Agent and be used inspite
@@ -39,7 +39,7 @@ INCLUDEDIRS= -I$(HSAINC) \
 # Compiler Info
 CC=g++
 # Remove / add -DENABLE_LOGGING to disable tracing
-CFLAGS= -g -fPIC -m64 -Wall -std=c++11 -DAMD_INTERNAL_BUILD $(INCLUDEDIRS)
+CFLAGS= -g -fPIC -m64 -Wall -std=c++11 -DAMD_INTERNAL_BUILD -DFUTURE_ROCR_VERSION $(INCLUDEDIRS)
 # -B-symbolic added for libelf
 LDFLAGS= -g -shared -pthread -Wl,-Bsymbolic -Wl,-Bsymbolic-functions
 
@@ -63,6 +63,7 @@ SOURCES=\
 	AgentProcessPacket.cpp\
 	AgentLogging.cpp\
 	AgentNotifyGdb.cpp\
+	AgentSegmentLoader.cpp\
 	AgentUtils.cpp\
 	AgentWavePrinter.cpp\
 	CommunicationControl.cpp\

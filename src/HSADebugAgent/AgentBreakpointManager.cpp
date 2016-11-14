@@ -101,9 +101,10 @@ bool AgentBreakpointManager::GetBreakpointFromGDBId(const GdbBkptId ipId,
         }
     }
 
+    // This is expected if we are creating a new breakpoint
     if (retVal == false)
     {
-        AGENT_ERROR("Could not find the breakpointID");
+        AGENT_LOG("Could not find the breakpointID");
     }
 
     return retVal;
@@ -256,39 +257,45 @@ bool AgentBreakpointManager::IsPCBreakpoint(const HwDbgCodeAddress pc) const
 }
 
 
-/// The CreateBreakpoint does not check for duplicate breakpoint creation, since it is too
-/// late to tell the user when it reaches the agent.  That will be the job of HwDbgFacilities
-/// in the GDB side
-HsailAgentStatus AgentBreakpointManager::CreateBreakpoint(const HwDbgContextHandle DbeContextHandle,
-                                                          const HsailCommandPacket ipPacket,
-                                                          const HsailBkptType      ipType)
+bool AgentBreakpointManager::IsDuplicatesPresent(const HwDbgContextHandle  dbeContextHandle,
+                                                 const HsailCommandPacket& ipPacket,
+                                                 const HsailBkptType       ipType)
 {
-    HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
-
-    if (ipPacket.m_command != HSAIL_COMMAND_CREATE_BREAKPOINT)
-    {
-        AGENT_ERROR("CreateBreakpoint: Function called for wrong packet type");
-        return status;
-    }
-
     // Check for duplicate source breakpoints
     int duplicatePosition;
+    bool isDuplicatePresent = false;
 
     if (ipType == HSAIL_BREAKPOINT_TYPE_PC_BP)
     {
         if (IsPCExists(ipPacket.m_pc, duplicatePosition))
         {
+            // Handle the case that we have a breakpoint at a certain PC and we see another
+            // gdb id at the same PC
+
+            // Check for duplicate source breakpoints
             AGENT_LOG("CreateBreakpoint: Detected a duplicate Kernel Source breakpoint\n" <<
                        "Append GDB ID " << ipPacket.m_gdbBreakpointID << " to m_GdbId vector");
 
             m_pBreakpoints.at(duplicatePosition)->m_GdbId.push_back(ipPacket.m_gdbBreakpointID);
-            return HSAIL_AGENT_STATUS_SUCCESS;
+            isDuplicatePresent = true;
+        }
+        else if (GetBreakpointFromGDBId(ipPacket.m_gdbBreakpointID, &duplicatePosition))
+        {
+            // Handle the case that we have a breakpoint at a certain PC and we see
+            // the same gdb id at a different PC, this could happen if the same code
+            // object is dispatched multiple times, we'd have a different mem addr
+            // if a new AQL packet is dispatched.
+
+            m_pBreakpoints.at(duplicatePosition)->m_pc = ipPacket.m_pc;
+            m_pBreakpoints.at(duplicatePosition)->CreateBreakpointDBE(dbeContextHandle,
+                                                                     ipPacket.m_gdbBreakpointID);
+            isDuplicatePresent = true;
+
         }
     }
-
-    // Check for duplicate function breakpoints
-    if (ipType == HSAIL_BREAKPOINT_TYPE_KERNEL_NAME_BP)
+    else if (ipType == HSAIL_BREAKPOINT_TYPE_KERNEL_NAME_BP)
     {
+        // Check for duplicate function breakpoints
         std::string kernelName;
         kernelName.assign(ipPacket.m_kernelName);
 
@@ -298,15 +305,37 @@ HsailAgentStatus AgentBreakpointManager::CreateBreakpoint(const HwDbgContextHand
             AGENT_OP("ROCm-gdb detected a duplicate function breakpoint") ;
 
             m_pBreakpoints.at(duplicatePosition)->m_GdbId.push_back(ipPacket.m_gdbBreakpointID);
-            return HSAIL_AGENT_STATUS_SUCCESS;
+            isDuplicatePresent = true;
         }
+    }
+
+    return isDuplicatePresent;
+}
+
+
+HsailAgentStatus AgentBreakpointManager::CreateBreakpoint(const HwDbgContextHandle            DbeContextHandle,
+                                                          const hsa_kernel_dispatch_packet_t* pAqlPacket,
+                                                          const HsailCommandPacket            ipPacket,
+                                                          const HsailBkptType                 ipType)
+{
+    HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
+
+    if (ipPacket.m_command != HSAIL_COMMAND_CREATE_BREAKPOINT)
+    {
+        AGENT_ERROR("CreateBreakpoint: Function called for wrong packet type");
+        return status;
+    }
+
+    if (IsDuplicatesPresent(DbeContextHandle, ipPacket, ipType))
+    {
+        // If a duplicate is present, we dont need to do anything more
+        status = HSAIL_AGENT_STATUS_SUCCESS;
+        return status;
     }
 
     // If we reach here, we have a new breakpoint and we will need a AgentBreakpoint object
 
     // We need a valid DBE context for this call
-    // This enforces our step in logic which says that we cannot create a kernel pc
-    // breakpoint before we create a function breakpoint
     AgentBreakpoint* pBkpt = new(std::nothrow) AgentBreakpoint;
 
     if (pBkpt == nullptr)
@@ -332,6 +361,7 @@ HsailAgentStatus AgentBreakpointManager::CreateBreakpoint(const HwDbgContextHand
     {
         AGENT_LOG("CreateBreakpoint: Try to create a function breakpoint");
     }
+
     // We need a function breakpoint
     // We should have some valid data in the packet to assign
     if (ipPacket.m_kernelName != nullptr && ipType == HSAIL_BREAKPOINT_TYPE_KERNEL_NAME_BP)
@@ -1085,8 +1115,6 @@ void AgentBreakpointManager::PrintWaveInfo(const HwDbgWavefrontInfo* pWaveInfo, 
 /// if we just want to print one wave (focus wave and stuff..)
 ///
 /// Another alternative is we use the waveprinter class here so we dont need to call DBE again
-/// \todo fb bug 11073: We cannot use this function for stopping at kernel function breakpoints
-/// for now
 HsailAgentStatus AgentBreakpointManager::PrintStoppedReason(const HwDbgEventType         DbeEventType,
                                                             const HwDbgContextHandle     DbeContextHandle,
                                                                   AgentFocusWaveControl* pFocusWaveControl,

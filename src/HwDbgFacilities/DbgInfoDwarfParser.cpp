@@ -20,12 +20,13 @@
 // which contains windows headers, to avoid a redundant warning.
 //==============================================================================
 #ifdef SLIST_ENTRY
-    #undef SLIST_ENTRY
+#undef SLIST_ENTRY
 #endif
 
 /// STL:
-#include <queue>
 #include <assert.h>
+#include <queue>
+#include <stack>
 #include <string.h>
 
 /// HSA:
@@ -47,7 +48,7 @@
 #define DW_DLA_LOC_BLOCK 0x16
 //@}
 //@{
-/// \def [US] 1/2/12 + [GY] 2/26/13 + [US] 5/9/13: private AMD values for DWARF from hsa_dwarf.h and 
+/// \def [US] 1/2/12 + [GY] 2/26/13 + [US] 5/9/13: private AMD values for DWARF from hsa_dwarf.h and
 #define DW_AT_AMDIL_address_space 0x3ff1
 #define DW_AT_AMDIL_resource 0x3ff2
 
@@ -122,15 +123,16 @@ void DwarfVariableLocation::AsString(const DwarfVariableLocation& loc, std::stri
     std::string locReg;
     LocRegToStr(loc.m_locationRegister, locReg);
     o_outputString = locReg;
-    o_outputString += string_format(" (Reg #%ld, Indirect? %c, Offset %#lx, Resource %lld, ISA Mem Region %ld, Piece Offset %#lx, Piece Size %#lx, Const addition %d)",
-                                    loc.m_registerNumber,
-                                    loc.m_shouldDerefValue ? 'y' : 'n',
-                                    loc.m_locationOffset,
-                                    loc.m_locationResource,
-                                    loc.m_isaMemoryRegion,
-                                    loc.m_pieceOffset,
-                                    loc.m_pieceSize,
-                                    loc.m_constAddition);
+    o_outputString +=
+        string_format(" (Reg #%ld, Indirect? %c, Offset %#lx, Resource %lld, ISA Mem Region %ld, Piece Offset %#lx, Piece Size %#lx, Const addition %d)",
+                      loc.m_registerNumber,
+                      loc.m_shouldDerefValue ? 'y' : 'n',
+                      loc.m_locationOffset,
+                      loc.m_locationResource,
+                      loc.m_isaMemoryRegion,
+                      loc.m_pieceOffset,
+                      loc.m_pieceSize,
+                      loc.m_constAddition);
 }
 
 /// -----------------------------------------------------------------------------------------------
@@ -140,7 +142,8 @@ void DwarfVariableLocation::AsString(const DwarfVariableLocation& loc, std::stri
 /// \param[out]         o_outputString - output string
 /// \return void
 /// -----------------------------------------------------------------------------------------------
-void DwarfVariableLocation::LocRegToStr(const DwarfVariableLocation::LocationRegister& locType, std::string& o_outputString)
+void DwarfVariableLocation::LocRegToStr(const DwarfVariableLocation::LocationRegister& locType,
+                                        std::string& o_outputString)
 {
     switch (locType)
     {
@@ -177,7 +180,10 @@ void DwarfVariableLocation::LocRegToStr(const DwarfVariableLocation::LocationReg
 /// \return True : Success
 /// \return False: Failure
 /// -----------------------------------------------------------------------------------------------
-bool DbgInfoDwarfParser::FillLineMappingFromDwarf(Dwarf_Die cuDIE, const std::string& firstSourceFileRealPath, Dwarf_Debug pDwarf, DwarfLineMapping& o_lineNumberMapping)
+bool DbgInfoDwarfParser::FillLineMappingFromDwarf(Dwarf_Die cuDIE,
+                                                  const std::string& firstSourceFileRealPath,
+                                                  Dwarf_Debug pDwarf,
+                                                  DwarfLineMapping& o_lineNumberMapping)
 {
     bool retVal = false;
     Dwarf_Error err = {0};
@@ -255,7 +261,8 @@ bool DbgInfoDwarfParser::FillLineMappingFromDwarf(Dwarf_Die cuDIE, const std::st
 
                         FileLocation fileLocation(sourceFilePathAsString, static_cast<HwDbgUInt64>(lineNum));
                         // Success if we have successfully added the mapping or if the address is 0:
-                        bool addSucceeded = o_lineNumberMapping.AddLineMapping(fileLocation, static_cast<DwarfAddrType>(lineAddress)) || (0 == lineAddress);
+                        bool addSucceeded = o_lineNumberMapping.AddLineMapping(fileLocation, static_cast<DwarfAddrType>(lineAddress))
+                                            || (0 == lineAddress);
                         HWDBG_ASSERT(addSucceeded);
                     }
                 }
@@ -283,7 +290,12 @@ bool DbgInfoDwarfParser::FillLineMappingFromDwarf(Dwarf_Die cuDIE, const std::st
 /// \param[out] o_scope - Out param scope to fill
 /// \return void
 /// ---------------------------------------------------------------------------
-void DbgInfoDwarfParser::FillCodeScopeFromDwarf(Dwarf_Die programDIE, const std::string& firstSourceFileRealPath, Dwarf_Debug pDwarf, DwarfCodeScope* pParentScope, const DwarfCodeScopeType& scopeType, DwarfCodeScope& o_scope)
+void DbgInfoDwarfParser::FillCodeScopeFromDwarf(Dwarf_Die           programDIE,
+                                                const std::string&        firstSourceFileRealPath,
+                                                Dwarf_Debug         pDwarf,
+                                                DwarfCodeScope*     pParentScope,
+                                                const DwarfCodeScopeType& scopeType,
+                                                DwarfCodeScope&     o_scope)
 {
     o_scope.m_scopeType = scopeType;
     o_scope.m_pParentScope = pParentScope;
@@ -305,6 +317,47 @@ void DbgInfoDwarfParser::FillCodeScopeFromDwarf(Dwarf_Die programDIE, const std:
 
     // Intersect the variables in this program:
     o_scope.IntersectVariablesInScope();
+
+    // Fill from dwarf DIE reference
+    FillCodeScopeFromDwarfRef(programDIE, firstSourceFileRealPath, pDwarf, o_scope);
+}
+
+/// ---------------------------------------------------------------------------
+/// DbgInfoDwarfParser::FillCodeScopeFromDwarfRef
+/// \brief Description: Internal function which fill a scope object data form its reference DIE
+/// \param[in] programDIE - Input ptr
+/// \param[in] firstSourceFileRealPath
+/// \param[in] pDwarf - Allocation/Deallocation object ptr
+/// \param[out] o_scope - Out param scope to fill
+/// \return void
+/// ---------------------------------------------------------------------------
+void DbgInfoDwarfParser::FillCodeScopeFromDwarfRef(Dwarf_Die programDIE,
+                                                   const std::string& firstSourceFileRealPath,
+                                                   Dwarf_Debug pDwarf,
+                                                   DwarfCodeScope& o_scope)
+{
+    Dwarf_Attribute functionAbstractOriginAsAttribute = nullptr;
+    Dwarf_Error err;
+    int rc = dwarf_attr(programDIE, DW_AT_abstract_origin, &functionAbstractOriginAsAttribute, &err);
+
+    if ((rc == DW_DLV_OK) && (functionAbstractOriginAsAttribute != nullptr))
+    {
+        // Get the function abstract origin DIE:
+        Dwarf_Die functionAbstractOriginDIE = nullptr;
+        rc = GetDwarfFormRefDie(functionAbstractOriginAsAttribute, &functionAbstractOriginDIE, &err, pDwarf);
+
+        if ((rc == DW_DLV_OK) && (functionAbstractOriginDIE != nullptr))
+        {
+            FillCodeScopeFromDwarf(functionAbstractOriginDIE, firstSourceFileRealPath, pDwarf, o_scope.m_pParentScope,
+                                   o_scope.m_scopeType, o_scope);
+
+            // Release the DIE:
+            dwarf_dealloc(pDwarf, (Dwarf_Ptr)functionAbstractOriginDIE, DW_DLA_DIE);
+        }
+
+        // Release the attribute:
+        dwarf_dealloc(pDwarf, (Dwarf_Ptr)functionAbstractOriginAsAttribute, DW_DLA_ATTR);
+    }
 }
 
 /// ---------------------------------------------------------------------------
@@ -318,7 +371,8 @@ void DbgInfoDwarfParser::FillCodeScopeFromDwarf(Dwarf_Die programDIE, const std:
 /// \return void
 /// ---------------------------------------------------------------------------
 
-void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& firstSourceFileRealPath, Dwarf_Debug pDwarf, DwarfCodeScope& o_scope)
+void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& firstSourceFileRealPath,
+                                      Dwarf_Debug pDwarf, DwarfCodeScope& o_scope)
 {
     // Iterate this DIE's Children, and create program and variable data objects for them:
     Dwarf_Die currentChild = nullptr;
@@ -328,6 +382,7 @@ void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& f
 
     while (goOn)
     {
+        bool isMember = false;
         // Get the current child's DWARF TAG:
         Dwarf_Half currentChildTag = 0;
         rc = dwarf_tag(currentChild, &currentChildTag, &err);
@@ -339,9 +394,7 @@ void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& f
             switch (currentChildTag)
             {
                 case DW_TAG_array_type:
-                case DW_TAG_class_type:
                 case DW_TAG_enumeration_type:
-                case DW_TAG_member:
                 case DW_TAG_pointer_type:
                 case DW_TAG_string_type:
                 case DW_TAG_structure_type:
@@ -354,14 +407,19 @@ void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& f
                 }
                 break;
 
+                case DW_TAG_class_type:
                 case DW_TAG_entry_point:
                 case DW_TAG_lexical_block:
                 case DW_TAG_inlined_subroutine:
                 case DW_TAG_subprogram:
-                case DW_TAG_HSA_argument_scope:
+                case DW_TAG_HSA_argument_scope: // This tag will only be found in the HSAIL backend
                 {
-                    // Add the child scope:
-                    AddChildScope(currentChild, firstSourceFileRealPath, pDwarf, GetScopeTypeFromTAG(currentChildTag), o_scope);
+                    // Add the child scope in o_scope
+                    AddChildScope(currentChild,
+                                 firstSourceFileRealPath,
+                                 pDwarf,
+                                 GetScopeTypeFromTAG(currentChildTag),
+                                 o_scope);
                 }
                 break;
 
@@ -372,11 +430,21 @@ void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& f
                 }
                 break;
 
+                case DW_TAG_member:
                 case DW_TAG_formal_parameter:
                 case DW_TAG_constant:
                 case DW_TAG_enumerator:
                 case DW_TAG_variable:
                 {
+                    // We set the isMember flag based on the DW_TAG_member tag here since
+                    // the FillVariableWithInformationFromDIE() function will decide
+                    // whether to read the expression at "DW_AT_data_member_location" or
+                    // DW_AT_location" based on isMember
+                    if (currentChildTag == DW_TAG_member)
+                    {
+                        isMember = true;
+                    }
+
                     // This is a variable/const/parameter, create an object: (note: if this is a const we will need to get the value and call SetConstantValue())
                     bool isConst = false;
                     bool isParam = false;
@@ -396,7 +464,12 @@ void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& f
                     }
 
                     std::vector<DwarfVariableLocation> variableAdditionalLocations;
-                    FillVariableWithInformationFromDIE(currentChild, pDwarf, false, *pVariable, variableAdditionalLocations);
+
+                    FillVariableWithInformationFromDIE(currentChild,
+                                                       pDwarf,
+                                                       isMember,
+                                                       *pVariable,
+                                                       variableAdditionalLocations);
 
                     // Add it to our variables vector:
                     o_scope.m_scopeVars.push_back(pVariable);
@@ -406,7 +479,9 @@ void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& f
                     // Check that we do not have a const value type AND locations as const vars do not have location:
                     HWDBG_ASSERT((!isConst) || numberOfAdditionalLocations == 0);
 
-                    if ((isConst) || numberOfAdditionalLocations == 0)
+                    // Add additional locations if const or if FillVariableWithInformationFromDIE
+                    // found any others while parsing the DWARF
+                    if ((isConst) || (numberOfAdditionalLocations != 0))
                     {
                         for (int i = 0; i < numberOfAdditionalLocations; i++)
                         {
@@ -470,7 +545,8 @@ void DbgInfoDwarfParser::FillChildren(Dwarf_Die programDIE, const std::string& f
 /// \param[out] o_scope - Output parameter The scope to which we add the child scope
 /// \return void
 /// ---------------------------------------------------------------------------
-void DbgInfoDwarfParser::AddChildScope(Dwarf_Die childDIE, const std::string& firstSourceFileRealPath, Dwarf_Debug pDwarf, const DwarfCodeScopeType& childScopeType, DwarfCodeScope& o_scope)
+void DbgInfoDwarfParser::AddChildScope(Dwarf_Die childDIE, const std::string& firstSourceFileRealPath,
+                                       Dwarf_Debug pDwarf, const DwarfCodeScopeType& childScopeType, DwarfCodeScope& o_scope)
 {
     bool shouldAddSubprogram = true;
     Dwarf_Error err = {0};
@@ -822,7 +898,8 @@ void DbgInfoDwarfParser::FillFrameBase(Dwarf_Die programDIE, Dwarf_Debug pDwarf,
         rcAddr = dwarf_whatform(fbLocDescAsAttribute, &attrFormat, &err);
 
         if ((DW_DLV_OK == rcAddr) &&
-            ((DW_FORM_block == attrFormat) || (DW_FORM_block1 == attrFormat) || (DW_FORM_block2 == attrFormat) || (DW_FORM_block4 == attrFormat)))
+                ((DW_FORM_block == attrFormat) || (DW_FORM_block1 == attrFormat) || (DW_FORM_block2 == attrFormat)
+                 || (DW_FORM_block4 == attrFormat)))
         {
             rcAddr = dwarf_loclist(fbLocDescAsAttribute, &pFramePointerLocation, &numberOfLocations, &err);
         }
@@ -870,7 +947,8 @@ void DbgInfoDwarfParser::FillFrameBase(Dwarf_Die programDIE, Dwarf_Debug pDwarf,
 /// \param[out] o_locationType - output Parameter the location type.
 /// \return the register number
 /// ---------------------------------------------------------------------------
-void DbgInfoDwarfParser::UpdateLocationWithDWARFData(const Dwarf_Loc& locationRegister, DwarfVariableLocation& io_location, bool isMember)
+void DbgInfoDwarfParser::UpdateLocationWithDWARFData(const Dwarf_Loc& locationRegister,
+                                                     DwarfVariableLocation& io_location, bool isMember)
 {
     switch (locationRegister.lr_atom)
     {
@@ -1136,6 +1214,7 @@ void DbgInfoDwarfParser::GetVariableValueTypeFromTAG(int dwarfTAG, bool& isConst
             isParam = true;
             break;
 
+        case DW_TAG_member:
         case DW_TAG_variable:
             isConst = false;
             isParam = false;
@@ -1175,6 +1254,7 @@ DbgInfoDwarfParser::DwarfCodeScopeType DbgInfoDwarfParser::GetScopeTypeFromTAG(i
             retVal = DwarfCodeScope::DID_SCT_INLINED_FUNCTION;
             break;
 
+        case DW_TAG_class_type:
         case DW_TAG_lexical_block:
             retVal = DwarfCodeScope::DID_SCT_CODE_SCOPE;
             break;
@@ -1205,7 +1285,8 @@ DbgInfoDwarfParser::DwarfCodeScopeType DbgInfoDwarfParser::GetScopeTypeFromTAG(i
 /// \param[out] o_scope - Output Parameter containing the scope of the inlined function.
 /// \return void
 /// ---------------------------------------------------------------------------
-void DbgInfoDwarfParser::FillInlinedFunctionData(Dwarf_Die programDIE, const std::string& firstSourceFileRealPath, Dwarf_Debug pDwarf, DwarfCodeScope& o_scope)
+void DbgInfoDwarfParser::FillInlinedFunctionData(Dwarf_Die programDIE, const std::string& firstSourceFileRealPath,
+                                                 Dwarf_Debug pDwarf, DwarfCodeScope& o_scope)
 {
     Dwarf_Error err = {0};
     // Get the line number:
@@ -1311,7 +1392,8 @@ void DbgInfoDwarfParser::FillInlinedFunctionData(Dwarf_Die programDIE, const std
 /// \param[in] variableLocations - output parameter with variable locations.
 /// \return Success / failure.
 /// ---------------------------------------------------------------------------
-bool DbgInfoDwarfParser::ListVariableRegisterLocations(const DwarfCodeScope* pTopScope, std::vector<DwarfAddrType>& variableLocations)
+bool DbgInfoDwarfParser::ListVariableRegisterLocations(const DwarfCodeScope* pTopScope,
+                                                       std::vector<DwarfAddrType>& variableLocations)
 {
     bool retVal = false;
 
@@ -1400,7 +1482,11 @@ bool DbgInfoDwarfParser::ListVariableRegisterLocations(const DwarfCodeScope* pTo
 /// \param[out] o_variable - output parameter variable
 /// \return void
 /// ---------------------------------------------------------------------------
-void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dwarf_Debug pDwarf, bool expandIndirectMembers, bool isRegisterParamter, DwarfVariableInfo& o_variable)
+void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE,
+                                                           Dwarf_Debug pDwarf,
+                                                           bool expandIndirectMembers,
+                                                           bool isRegisterParamter,
+                                                           DwarfVariableInfo& o_variable)
 {
     Dwarf_Error err = {0};
     o_variable.m_typeName.clear();
@@ -1424,7 +1510,8 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
         if (rc == DW_DLV_OK)
         {
             // Try getting the address class of reference and pointer types:
-            if ((DW_TAG_pointer_type == currentTypeTag) || (DW_TAG_reference_type == currentTypeTag) || (DW_TAG_array_type == currentTypeTag))
+            if ((DW_TAG_pointer_type == currentTypeTag) || (DW_TAG_reference_type == currentTypeTag)
+                    || (DW_TAG_array_type == currentTypeTag))
             {
                 // Get the address class:
                 Dwarf_Unsigned addressClassAsDWUnsigned = (Dwarf_Unsigned) - 1;
@@ -1486,6 +1573,26 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
 
                     break;
 
+                case DW_TAG_class_type:
+                case DW_TAG_structure_type:
+                case DW_TAG_union_type:
+
+                    // This is a struct, it will not point to another type, and we'll not show its "value":
+                    encodingKnown = true;
+                    hasMembers = true;
+
+                    if (foundName)
+                    {
+                        goOn = false;
+                    }
+                    else
+                    {
+                        // Try and see if this struct has a typedef sibling:
+                        getSibling = true;
+                    }
+
+                    break;
+
                 case DW_TAG_enumeration_type:
 
                     // This is an enumeration, show this in the name and stop looking
@@ -1529,24 +1636,22 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
 
                     break;
 
-                case DW_TAG_structure_type:
-                case DW_TAG_union_type:
-
-                    // This is a struct, it will not point to another type, and we'll not show its "value":
+                case DW_TAG_subroutine_type:
+                    // These could be handled more precisely, as the DWARF info:
+                    // DW_TAG_subroutine_type - DW_AT_type - the function return type. If this attribute is missing, the return type is void
+                    // DW_TAG_subroutine_type - children of DW_TAG_formal_paramter - the function parameters, including name and type if available.
+                    // For now, just denote it's a function pointer:
+                    o_variable.m_typeName = "<function pointer>";
+                    o_variable.m_varEncoding = HWDBGINFO_VENC_POINTER;
                     encodingKnown = true;
-                    hasMembers = true;
 
-                    if (foundName)
-                    {
-                        goOn = false;
-                    }
-                    else
-                    {
-                        // Try and see if this struct has a typedef sibling:
-                        getSibling = true;
-                    }
+                    // The "members" of a subroutine type are the function parameters. Ignore them:
+                    hasMembers = false;
 
+                    foundName = true;
+                    goOn = false;
                     break;
+
 
                 case DW_TAG_typedef:
                     // This is a typedef, we need to get the name from here but the rest of the details from the pointed value:
@@ -1565,9 +1670,7 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
                     // It is possible to add the modifier word (e.g. "const") between the next type element (e.g. int *const*) at this point.
                     break;
 
-                case DW_TAG_class_type:
                 case DW_TAG_string_type:
-                case DW_TAG_subroutine_type:
                 case DW_TAG_ptr_to_member_type:
                 case DW_TAG_set_type:
                 case DW_TAG_subrange_type:
@@ -1579,7 +1682,7 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
                 case DW_TAG_shared_type:
                 {
                     // Unsupported type:
-                    std::string errMsg = "Unsupported kernel variable type";
+                    std::string errMsg = string_format("Unsupported kernel variable type: %d", currentTypeTag);
                     HWDBG_ASSERT_EX(false, errMsg);
                 }
 
@@ -1684,7 +1787,7 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
 
     // If we did not find anything more detailed, consider a pointer as pointer type:
     if (((o_variable.m_varIndirection == HWDBGINFO_VIND_POINTER) || (o_variable.m_varIndirection == HWDBGINFO_VIND_ARRAY))
-        && (o_variable.m_varEncoding == HWDBGINFO_VENC_NONE) && (!encodingKnown))
+            && (o_variable.m_varEncoding == HWDBGINFO_VENC_NONE) && (!encodingKnown))
     {
         o_variable.m_varEncoding = HWDBGINFO_VENC_POINTER;
     }
@@ -1695,7 +1798,8 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
     }
 
     // We do not want to expand indirect members in some cases, to avoid recursive loops in this parsing code:
-    if ((o_variable.m_varEncoding == HWDBGINFO_VENC_POINTER) && (!expandIndirectMembers))
+    if (((o_variable.m_varEncoding == HWDBGINFO_VENC_POINTER) || (o_variable.m_varIndirection != HWDBGINFO_VIND_DIRECT))
+            && (!expandIndirectMembers))
     {
         hasMembers = false;
     }
@@ -1732,7 +1836,7 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
 
     // Get the encoding for types we want to know and for pointers, for dereferencing:
     if (((o_variable.m_varEncoding == HWDBGINFO_VENC_NONE) && (!encodingKnown))
-        || o_variable.m_varIndirection != HWDBGINFO_VIND_DIRECT)
+            || o_variable.m_varIndirection != HWDBGINFO_VIND_DIRECT)
     {
         // Get the encoding type:
         FillVarEncoding(currentType, o_variable);
@@ -1750,37 +1854,89 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
             // Iterate all the children:
             while (currentChild != nullptr)
             {
-                // Get the current member's data:
-                DwarfVariableInfo currentMember;
+                // Expand child DIEs only if they describe type members:
+                bool shouldExpandChild = true;
 
-                // If not const, share the VariableLocation detail with the members:
-                bool isConst = o_variable.IsConst();
-
-                if (!isConst)
+                Dwarf_Half currentChildTag = 0;
+                int rc = dwarf_tag(currentChild, &currentChildTag, &err);
+                if (DW_DLV_OK == rc)
                 {
-                    currentMember.m_varValue.m_varValueLocation = o_variable.m_varValue.m_varValueLocation;
-                    // See comment in FillVariableWithInformationFromDIE before the call to this function:
-                    // When a struct is passed by-value, its data is actually referenced and not direct.
-                    currentMember.m_varValue.m_varValueLocation.m_shouldDerefValue = isRegisterParamter || currentMember.m_varValue.m_varValueLocation.m_shouldDerefValue;
+                    switch (currentChildTag)
+                    {
+                        case DW_TAG_member:
+                            // This is an actual member:
+                            shouldExpandChild = true;
+                            break;
 
-                    currentMember.m_lowVariablePC = o_variable.m_lowVariablePC;
-                    currentMember.m_highVariablePC = o_variable.m_highVariablePC;
+                        case DW_TAG_array_type:
+                        case DW_TAG_class_type:
+                        case DW_TAG_enumeration_type:
+                        case DW_TAG_formal_parameter:
+                        case DW_TAG_label:
+                        case DW_TAG_structure_type:
+                        case DW_TAG_typedef:
+                        case DW_TAG_union_type:
+                        case DW_TAG_unspecified_parameters:
+                        case DW_TAG_inheritance:
+                        case DW_TAG_ptr_to_member_type:
+                        case DW_TAG_set_type:
+                        case DW_TAG_access_declaration:
+                        case DW_TAG_base_type:
+                        case DW_TAG_constant:
+                        case DW_TAG_enumerator:
+                        case DW_TAG_friend:
+                        case DW_TAG_subprogram:
+                        case DW_TAG_template_type_parameter:
+                        case DW_TAG_template_value_parameter:
+                        case DW_TAG_interface_type:
+                        case DW_TAG_unspecified_type:
+                        case DW_TAG_shared_type:
+                            // These are local definitions or other code objects that are subordinate to a given type.
+                            shouldExpandChild = false;
+                            break;
+
+                        default:
+                            std::string errMsg = string_format("Unsupported child of a type DIE: %d", currentChildTag);
+                            HWDBG_ASSERT_EX(false, errMsg);
+                            break;
+                    }
                 }
 
-                // Variables do not have locations that are scoped, so ignore them for this:
-                std::vector<DwarfVariableLocation> ignoredAdditionalLocations;
-                FillVariableWithInformationFromDIE(currentChild, pDwarf, true, currentMember, ignoredAdditionalLocations);
-                HWDBG_ASSERT(ignoredAdditionalLocations.size() == 0);
-
-                // If const, we calculate the buffer by taking the parent buffer and adding the member offset:
-                if (isConst)
+                if (shouldExpandChild)
                 {
-                    size_t memberOffset = currentMember.m_varValue.m_varValueLocation.m_locationOffset;
-                    currentMember.SetConstantValue(currentMember.m_varSize, o_variable.m_varValue.m_varConstantValue + memberOffset);
-                }
+                    // Get the current member's data:
+                    DwarfVariableInfo currentMember;
 
-                // Add the member to the vector:
-                o_variable.m_varMembers.push_back(currentMember);
+                    // If not const, share the VariableLocation detail with the members:
+                    bool isConst = o_variable.IsConst();
+
+                    if (!isConst)
+                    {
+                        currentMember.m_varValue.m_varValueLocation = o_variable.m_varValue.m_varValueLocation;
+                        // See comment in FillVariableWithInformationFromDIE before the call to this function:
+                        // When a struct is passed by-value, its data is actually referenced and not direct.
+                        currentMember.m_varValue.m_varValueLocation.m_shouldDerefValue = isRegisterParamter
+                                                                                         || currentMember.m_varValue.m_varValueLocation.m_shouldDerefValue;
+
+                        currentMember.m_lowVariablePC = o_variable.m_lowVariablePC;
+                        currentMember.m_highVariablePC = o_variable.m_highVariablePC;
+                    }
+
+                    // Variables do not have locations that are scoped, so ignore them for this:
+                    std::vector<DwarfVariableLocation> ignoredAdditionalLocations;
+                    FillVariableWithInformationFromDIE(currentChild, pDwarf, true, currentMember, ignoredAdditionalLocations);
+                    HWDBG_ASSERT(ignoredAdditionalLocations.size() == 0);
+
+                    // If const, we calculate the buffer by taking the parent buffer and adding the member offset:
+                    if (isConst)
+                    {
+                        size_t memberOffset = currentMember.m_varValue.m_varValueLocation.m_locationOffset;
+                        currentMember.SetConstantValue(currentMember.m_varSize, o_variable.m_varValue.m_varConstantValue + memberOffset);
+                    }
+
+                    // Add the member to the vector:
+                    o_variable.m_varMembers.push_back(currentMember);
+                }
 
                 // Move to the next member DIE:
                 Dwarf_Die nextChild = nullptr;
@@ -1819,7 +1975,10 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE, Dw
 /// \param[in] firstSourceFileRealPath - the path to the original source file for the mapping
 /// \return Success / failure.
 /// ---------------------------------------------------------------------------
-bool DbgInfoDwarfParser::InitializeWithBinary(const KernelBinary& kernelBinary, DwarfCodeScope& o_scope, DwarfLineMapping& o_lineNumberMapping, const std::string& firstSourceFileRealPath)
+bool DbgInfoDwarfParser::InitializeWithBinary(const KernelBinary& kernelBinary,
+                                              DwarfCodeScope& o_scope,
+                                              DwarfLineMapping& o_lineNumberMapping,
+                                              const std::string& firstSourceFileRealPath)
 {
     bool retVal = false;
 
@@ -1857,7 +2016,8 @@ bool DbgInfoDwarfParser::InitializeWithBinary(const KernelBinary& kernelBinary, 
 
                 if (rc == DW_DLV_OK)
                 {
-                    FillCodeScopeFromDwarf(cuDIE, firstSourceFileRealPath, pDwarf, nullptr, DwarfCodeScope::DID_SCT_COMPILATION_UNIT, o_scope);
+                    FillCodeScopeFromDwarf(cuDIE, firstSourceFileRealPath, pDwarf, nullptr, DwarfCodeScope::DID_SCT_COMPILATION_UNIT,
+                                           o_scope);
 
                     // Use the CU DIE to get the line number information. This needs to happen after the programs are
                     // initialized, since each entry must be associated with a program:
@@ -1869,6 +2029,7 @@ bool DbgInfoDwarfParser::InitializeWithBinary(const KernelBinary& kernelBinary, 
                     std::vector<DwarfAddrType> addresses;
                     o_lineNumberMapping.GetMappedAddresses(addresses);
                     retVal = o_scope.MapAddressesToCodeScopes(addresses);
+                    HWDBG_ASSERT(retVal);
 
                     // Release the CU DIE:
                     dwarf_dealloc(pDwarf, (Dwarf_Ptr)cuDIE, DW_DLA_DIE);
@@ -1913,7 +2074,11 @@ bool DbgInfoDwarfParser::InitializeWithBinary(const KernelBinary& kernelBinary, 
 /// \param[out] o_variableAdditionalLocations - additional locations of this same variable added so that we know if we have at least one location.
 /// \return void
 /// ---------------------------------------------------------------------------
-void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDIE, Dwarf_Debug pDwarf, bool isMember, DwarfVariableInfo& o_variableData, std::vector<DwarfVariableLocation>& o_variableAdditionalLocations)
+void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDIE,
+                                                            Dwarf_Debug pDwarf,
+                                                            bool isMember,
+                                                            DwarfVariableInfo& o_variableData,
+                                                            std::vector<DwarfVariableLocation>& o_variableAdditionalLocations)
 {
     Dwarf_Error err = {0};
     // Get the variable's location attribute:
@@ -1927,9 +2092,12 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
 
     // Locations:
     Dwarf_Attribute varLocDescAsAttribute = nullptr;
-    int rc = dwarf_attr(variableDIE, isMember ? DW_AT_data_member_location : DW_AT_location, &varLocDescAsAttribute, &err);
+    int rc = dwarf_attr(variableDIE,
+                        isMember ? DW_AT_data_member_location : DW_AT_location, // Choose attribute based on input
+                        &varLocDescAsAttribute,
+                        &err);
 
-    // Do not go in here if const:
+    // Do not go in here if const or if any variable location attribute is not found
     if ((rc == DW_DLV_OK) && (varLocDescAsAttribute != nullptr) && (!isConst))
     {
         // Get the location list from the attribute:
@@ -1943,7 +2111,11 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
         rc = dwarf_whatform(varLocDescAsAttribute, &attrFormat, &err);
 
         if ((DW_DLV_OK == rc) &&
-            ((DW_FORM_block == attrFormat) || (DW_FORM_block1 == attrFormat) || (DW_FORM_block2 == attrFormat) || (DW_FORM_block4 == attrFormat)))
+                ((DW_FORM_block == attrFormat)  ||
+                 (DW_FORM_block1 == attrFormat) ||
+                 (DW_FORM_block2 == attrFormat) ||
+                 (DW_FORM_block4 == attrFormat))
+              )
         {
             rc = dwarf_loclist(varLocDescAsAttribute, &pVarLocationDescriptions, &locationsCount, &err);
         }
@@ -1979,13 +2151,16 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
                     variableCurrentLocation.m_locationResource = (HwDbgUInt64)resourceAsDwarfUnsigned;
                 }
 
+                // <Perhaad> It needs to be clarified why this is done if only !member
                 if (!isMember)
                 {
                     o_variableData.m_lowVariablePC = static_cast<DwarfAddrType>(pVarLocationDescriptions[i].ld_lopc);
                     o_variableData.m_highVariablePC = static_cast<DwarfAddrType>(pVarLocationDescriptions[i].ld_hipc);
                 }
 
-                if ((rcHasStartScope == DW_DLV_OK) && (o_variableData.m_highVariablePC >= startScope) && (o_variableData.m_lowVariablePC < startScope))
+                if ((rcHasStartScope == DW_DLV_OK) &&
+                    (o_variableData.m_highVariablePC >= startScope) &&
+                    (o_variableData.m_lowVariablePC < startScope))
                 {
                     // This is more detailed, use it instead:
                     o_variableData.m_lowVariablePC = startScope;
@@ -1998,10 +2173,28 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
                     // Read all the operations:
                     int numberOfLocationsOperations = (int)pVarLocationDescriptions[i].ld_cents;
 
+                    std::stack<Dwarf_Loc> currentLocStack;
+
                     for (int j = 0; j < numberOfLocationsOperations; j++)
                     {
                         Dwarf_Loc& rCurrentLocationOperation = pLocationRecord[j];
-                        UpdateLocationWithDWARFData(rCurrentLocationOperation, variableCurrentLocation, isMember);
+
+                        if (rCurrentLocationOperation.lr_atom == DW_OP_constu)
+                        {
+                            currentLocStack.push(rCurrentLocationOperation);
+                        }
+                        else
+                        {
+                            if (rCurrentLocationOperation.lr_atom == DW_OP_xderef)
+                            {
+                                variableCurrentLocation.m_locationOffset = (unsigned int)(currentLocStack.top().lr_number);
+                                currentLocStack.pop();
+                                variableCurrentLocation.m_isaMemoryRegion = (unsigned int)(currentLocStack.top().lr_number);
+                                currentLocStack.pop();
+                            }
+
+                            UpdateLocationWithDWARFData(rCurrentLocationOperation, variableCurrentLocation, isMember);
+                        }
                     }
 
                     if (o_variableData.m_varSize > variableCurrentLocation.m_pieceSize)
@@ -2061,6 +2254,7 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
             FillTypeNameAndDetailsFromTypeDIE(typeDIE, pDwarf, !isMember, isRegisterParameter, o_variableData);
 
             // Do not allow members to have no name:
+            // Does not seem to occur in the case of hcc-lc
             if (isMember && (o_variableData.m_varName.empty()))
             {
                 CreateVarNameFromType(typeDIE, o_variableData);
@@ -2103,7 +2297,8 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
         {
             // Fill any data you can from the abstract origin. We do not need locations, since the abstract origin has none:
             std::vector<DwarfVariableLocation> ignoredAdditionalLocations;
-            FillVariableWithInformationFromDIE(variableAbstractOriginDIE, pDwarf, isMember, o_variableData, ignoredAdditionalLocations);
+            FillVariableWithInformationFromDIE(variableAbstractOriginDIE, pDwarf, isMember, o_variableData,
+                                               ignoredAdditionalLocations);
             HWDBG_ASSERT(ignoredAdditionalLocations.size() == 0);
 
             // Release the DIE:
@@ -2259,7 +2454,7 @@ void DbgInfoDwarfParser::FillVarEncoding(Dwarf_Die variableDIE, DwarfVariableInf
             case DW_ATE_decimal_float:
             {
                 // Unsupported type:
-                std::string errMsg = "Unsupported kernel variable type";
+                std::string errMsg = string_format("Unsupported kernel variable type: %d", typeEncodingAsDWARFUnsigned);
                 HWDBG_ASSERT_EX(false, errMsg);
             }
             break;
@@ -2291,7 +2486,7 @@ void DbgInfoDwarfParser::FillVarName(Dwarf_Die variableDIE, Dwarf_Debug pDwarf, 
     if ((rcNm == DW_DLV_OK) && (varNameAsCharArray != nullptr))
     {
         // Copy the name:
-        o_variable.m_varName = varNameAsCharArray;
+        o_variable.m_varName.assign(varNameAsCharArray);
 
         // Release the string:
         dwarf_dealloc(pDwarf, (Dwarf_Ptr)varNameAsCharArray, DW_DLA_STRING);
@@ -2344,6 +2539,9 @@ void DbgInfoDwarfParser::CreateVarNameFromType(Dwarf_Die typeDIE, DwarfVariableI
 
             case DW_TAG_class_type:
                 o_variable.m_varName += "class_";
+                break;
+            case DW_TAG_member:
+                o_variable.m_varName += "member_";
                 break;
 
             case DW_TAG_typedef:
@@ -2399,7 +2597,8 @@ void DbgInfoDwarfParser::FillConstValue(Dwarf_Die variableDIE, Dwarf_Debug pDwar
         if (rcCV == DW_DLV_OK)
         {
             // Copy it into the struct:
-            o_variable.SetConstantValue(static_cast<HwDbgUInt64>(constValueBlock->bl_len), static_cast<unsigned char*>(constValueBlock->bl_data));
+            o_variable.SetConstantValue(static_cast<HwDbgUInt64>(constValueBlock->bl_len),
+                                        static_cast<unsigned char*>(constValueBlock->bl_data));
             // Release the block:
             dwarf_dealloc(pDwarf, (Dwarf_Ptr)constValueBlock, DW_DLA_BLOCK);
         }
@@ -2418,7 +2617,8 @@ void DbgInfoDwarfParser::FillConstValue(Dwarf_Die variableDIE, Dwarf_Debug pDwar
 /// \param[in] dbg - This added parameter cannot be avoided since we can't get attr's attr->at_die->die_dbg member
 /// \return void
 /// ---------------------------------------------------------------------------
-int DbgInfoDwarfParser::GetDwarfFormRefDie(Dwarf_Attribute attr, Dwarf_Die* pReturnDIE, Dwarf_Error* pError, Dwarf_Debug dbg /* This added parameter cannot be avoided since we can't get attr's attr->at_die->die_dbg member */)
+int DbgInfoDwarfParser::GetDwarfFormRefDie(Dwarf_Attribute attr, Dwarf_Die* pReturnDIE, Dwarf_Error* pError,
+                                           Dwarf_Debug dbg /* This added parameter cannot be avoided since we can't get attr's attr->at_die->die_dbg member */)
 {
     int retVal = DW_DLV_OK;
 
@@ -2622,7 +2822,7 @@ void KernelBinary::setBinary(const void* pBinaryData, size_t binarySize)
 {
     if (nullptr != m_pBinaryData)
     {
-        delete[] (unsigned char*)m_pBinaryData;
+        delete[](unsigned char*)m_pBinaryData;
         m_pBinaryData = nullptr;
         m_binarySize = 0;
     }
@@ -2632,6 +2832,7 @@ void KernelBinary::setBinary(const void* pBinaryData, size_t binarySize)
     if ((nullptr != pBinaryData) && (0 < m_binarySize))
     {
         unsigned char* pBuffer = new(std::nothrow) unsigned char[m_binarySize];
+
         if (nullptr != pBuffer)
         {
             ::memcpy(pBuffer, pBinaryData, m_binarySize);
@@ -2794,7 +2995,8 @@ bool KernelBinary::getElfSectionAsBinary(int sectionIndex, KernelBinary& o_secti
 /// \brief Description: Extract an ELF section as a binary itself
 /// \return bool success
 /// -----------------------------------------------------------------------------------------------
-bool KernelBinary::getElfSectionAsBinary(const std::string& sectionName, KernelBinary& o_sectionAsBinary, int* o_pSectionLinkIndex) const
+bool KernelBinary::getElfSectionAsBinary(const std::string& sectionName, KernelBinary& o_sectionAsBinary,
+                                         int* o_pSectionLinkIndex) const
 {
     bool retVal = false;
 

@@ -38,6 +38,7 @@
 // Local:
 #include <DbgInfoDefinitions.h>
 #include <DbgInfoUtils.h>
+#include <DbgInfoLogging.h>
 #include <FacilitiesInterface.h>
 
 namespace HwDbg
@@ -52,7 +53,8 @@ template<typename AddrType, typename VarLocationType> struct VariableInfo
 {
     /// Abstract variable information
     typedef VariableInfo<AddrType, VarLocationType> FullVariableInfo;
-    typedef bool(*VariableMatchingFunc)(const FullVariableInfo& var, const void* matchData, const FullVariableInfo*& pFoundMember);
+    typedef bool(*VariableMatchingFunc)(const FullVariableInfo& var, const void* matchData,
+                                        const FullVariableInfo*& pFoundMember);
 
 public:
     /// \brief contains the value of the variable,
@@ -161,7 +163,9 @@ public:
     /// Find the innermost CodeScope which contains addr
     const FullCodeScope* FindSmallestScopeContainingAddress(const AddrType& addr) const;
     /// Find the innermost scope containing an address and variable name, and return that variable
-    const FullCodeScope* FindClosestScopeContainingVariable(AddrType startAddr, VarMatchFunc pfnMatch, const void* pMatchData, FullVariableInfo& o_variableInfo) const;
+    const FullCodeScope* FindClosestScopeContainingVariable(AddrType startAddr, VarMatchFunc pfnMatch,
+                                                            const void* pMatchData,
+                                                            FullVariableInfo& o_variableInfo) const;
     /// Get the stack depth of an address
     int GetStackDepth(const AddrType& addr) const;
     /// Return the lowest address in all the ranges in the scope
@@ -189,7 +193,8 @@ public:
 
 private:
     /// Internal function which puts each address in the innermost CodeScope containing it - Recursive
-    bool InternalMapAddressesToCodeScopes(const std::vector<AddrType>& addresses, std::map<AddrType, FullCodeScope*>& addrScopeMap);
+    bool InternalMapAddressesToCodeScopes(const std::vector<AddrType>& addresses,
+                                          std::map<AddrType, FullCodeScope*>& addrScopeMap);
     /// Get the subset of addresses which are in range of the current scope and return them as an out parameter
     bool GetAddressesInRange(const std::vector<AddrType>& addresses, std::vector<AddrType>& o_AddressesInRange) const;
     /// Check whether the specified address is in the code scope
@@ -331,7 +336,8 @@ VariableInfo<AddrType, VarLocationType>& VariableInfo<AddrType, VarLocationType>
 /// \return False: Otherwise
 /// -----------------------------------------------------------------------------------------------
 template<typename AddrType, typename VarLocationType>
-bool VariableInfo<AddrType, VarLocationType>::CanMatchMemberName(const std::string& memberFullName, const FullVariableInfo*& o_pFoundMember) const
+bool VariableInfo<AddrType, VarLocationType>::CanMatchMemberName(const std::string& memberFullName,
+                                                                 const FullVariableInfo*& o_pFoundMember) const
 {
     // Tokenize the name:
     bool retVal = false;
@@ -409,7 +415,9 @@ bool VariableInfo<AddrType, VarLocationType>::CanMatchMemberName(const std::stri
 /// -----------------------------------------------------------------------------------------------
 template<typename AddrType, typename LineType, typename VarLocationType>
 CodeScope<AddrType, LineType, VarLocationType>::CodeScope()
-    : m_scopeType(DID_SCT_COMPILATION_UNIT), m_pFrameBase(nullptr), m_pParentScope(nullptr), m_scopeHasNonTrivialAddressRanges(false), m_isKernel(false), m_pWorkitemOffset(nullptr)
+    : m_scopeType(DID_SCT_COMPILATION_UNIT), m_pFrameBase(nullptr), m_pParentScope(nullptr),
+      m_scopeHasNonTrivialAddressRanges(false),
+      m_isKernel(false), m_pWorkitemOffset(nullptr)
 {
 };
 
@@ -442,8 +450,11 @@ CodeScope<AddrType, LineType, VarLocationType>::~CodeScope()
 
     for (size_t i = 0; i < numberOfVars; i++)
     {
-        delete m_scopeVars[i];
-        m_scopeVars[i] = nullptr;
+        if (m_scopeVars[i] != nullptr)
+        {
+            delete m_scopeVars[i];
+            m_scopeVars[i] = nullptr;
+        }
     }
 
     m_scopeVars.clear();
@@ -456,7 +467,9 @@ CodeScope<AddrType, LineType, VarLocationType>::~CodeScope()
 /// \return A pointer to the codescope
 /// -----------------------------------------------------------------------------------------------
 template<typename AddrType, typename LineType, typename VarLocationType>
-const CodeScope<AddrType, LineType, VarLocationType>* CodeScope<AddrType, LineType, VarLocationType>::FindSmallestScopeContainingAddress(const AddrType& addr) const
+const CodeScope<AddrType, LineType, VarLocationType>*
+CodeScope<AddrType, LineType, VarLocationType>::FindSmallestScopeContainingAddress(
+    const AddrType& addr) const
 {
     const FullCodeScope* pRetVal = nullptr;
     const FullCodeScope* pTmpVal = nullptr;
@@ -640,7 +653,8 @@ bool CodeScope<AddrType, LineType, VarLocationType>::IsAddressInCodeScope(const 
 /// \return False: no addresses found
 /// -----------------------------------------------------------------------------------------------
 template<typename AddrType, typename LineType, typename VarLocationType>
-bool CodeScope<AddrType, LineType, VarLocationType>::GetAddressesInRange(const std::vector<AddrType>& addresses, std::vector<AddrType>& o_AddressesInRange) const
+bool CodeScope<AddrType, LineType, VarLocationType>::GetAddressesInRange(const std::vector<AddrType>& addresses,
+        std::vector<AddrType>& o_AddressesInRange) const
 {
     bool retVal = false;
     o_AddressesInRange.clear();
@@ -675,9 +689,12 @@ bool CodeScope<AddrType, LineType, VarLocationType>::MapAddressesToCodeScopes(co
 {
     bool retVal = false;
     // Only allow this function to be run on the top level scope:
-    HWDBG_ASSERT((m_scopeType == FullCodeScope::DID_SCT_COMPILATION_UNIT || m_scopeType == FullCodeScope::DID_SCT_GLOBAL_SCOPE) && m_pParentScope == nullptr);
+    HWDBG_ASSERT((m_scopeType == FullCodeScope::DID_SCT_COMPILATION_UNIT
+                  || m_scopeType == FullCodeScope::DID_SCT_GLOBAL_SCOPE)
+                 && m_pParentScope == nullptr);
 
-    if ((m_scopeType == FullCodeScope::DID_SCT_COMPILATION_UNIT || m_scopeType == FullCodeScope::DID_SCT_GLOBAL_SCOPE) && m_pParentScope == nullptr)
+    if ((m_scopeType == FullCodeScope::DID_SCT_COMPILATION_UNIT || m_scopeType == FullCodeScope::DID_SCT_GLOBAL_SCOPE)
+            && m_pParentScope == nullptr)
     {
         // Initialize map:
         std::map<AddrType, FullCodeScope*> addrScopeMap;
@@ -692,7 +709,8 @@ bool CodeScope<AddrType, LineType, VarLocationType>::MapAddressesToCodeScopes(co
             {
                 AddrType addrType = it->first;
                 FullCodeScope* pCodeScope = it->second;
-                HWDBG_ASSERT(pCodeScope->m_pParentScope == nullptr || pCodeScope->m_scopeType == FullCodeScope::DID_SCT_INLINED_FUNCTION || pCodeScope->m_scopeType == FullCodeScope::DID_SCT_FUNCTION);
+                HWDBG_ASSERT(pCodeScope->m_pParentScope == nullptr || pCodeScope->m_scopeType == FullCodeScope::DID_SCT_INLINED_FUNCTION
+                             || pCodeScope->m_scopeType == FullCodeScope::DID_SCT_FUNCTION);
                 pCodeScope->m_addressCache.insert(addrType);
             }
         }
@@ -710,12 +728,15 @@ bool CodeScope<AddrType, LineType, VarLocationType>::MapAddressesToCodeScopes(co
 /// \return False: Otherwise
 /// -----------------------------------------------------------------------------------------------
 template<typename AddrType, typename LineType, typename VarLocationType>
-bool CodeScope<AddrType, LineType, VarLocationType>::InternalMapAddressesToCodeScopes(const std::vector<AddrType>& addresses, std::map<AddrType, FullCodeScope*>& o_addrScopeMap)
+bool CodeScope<AddrType, LineType, VarLocationType>::InternalMapAddressesToCodeScopes(
+    const std::vector<AddrType>& addresses,
+    std::map<AddrType, FullCodeScope*>& o_addrScopeMap)
 {
     bool retVal = false;
 
     // If this scope is the top level, or it is a function, get its memory addresses:
-    if (m_pParentScope == nullptr || m_scopeType == FullCodeScope::DID_SCT_INLINED_FUNCTION || m_scopeType == FullCodeScope::DID_SCT_FUNCTION)
+    if (m_pParentScope == nullptr || m_scopeType == FullCodeScope::DID_SCT_INLINED_FUNCTION
+            || m_scopeType == FullCodeScope::DID_SCT_FUNCTION)
     {
         std::vector<AddrType> addressesInRange;
         GetAddressesInRange(addresses, addressesInRange);
@@ -775,7 +796,12 @@ bool CodeScope<AddrType, LineType, VarLocationType>::InternalMapAddressesToCodeS
 /// \return pointer to the closest scope containing the variable
 /// -----------------------------------------------------------------------------------------------
 template<typename AddrType, typename LineType, typename VarLocationType>
-const CodeScope<AddrType, LineType, VarLocationType>* CodeScope<AddrType, LineType, VarLocationType>::FindClosestScopeContainingVariable(AddrType startAddr, VarMatchFunc pfnMatch, const void* pMatchData, FullVariableInfo& o_variableInfo) const
+const CodeScope<AddrType, LineType, VarLocationType>*
+CodeScope<AddrType, LineType, VarLocationType>::FindClosestScopeContainingVariable(
+    AddrType          startAddr,
+    VarMatchFunc      pfnMatch,
+    const void*             pMatchData,
+    FullVariableInfo& o_variableInfo) const
 {
     const FullCodeScope* retVal = nullptr;
 
@@ -784,6 +810,11 @@ const CodeScope<AddrType, LineType, VarLocationType>* CodeScope<AddrType, LineTy
 
     while (pCurrentScope != nullptr)
     {
+        DBGINFO_LOG(std::hex
+                    << "CurrentScope MinAddr: " << pCurrentScope->m_scopeAddressRanges[0].m_minAddr << "\t"
+                    << "CurrentScope MaxAddr: " << pCurrentScope->m_scopeAddressRanges[0].m_maxAddr
+                    << std::dec << "\n");
+
         // See if this scope contains a variable named correctly:
         int numberOfVars = (int)pCurrentScope->m_scopeVars.size();
         bool foundVar = false;
@@ -920,7 +951,7 @@ void CodeScope<AddrType, LineType, VarLocationType>::IntersectVariablesInScope()
                             if (pCurrentVariable->m_highVariablePC >= maxAddr)
                             {
                                 if ((pCurrentVariable->m_highVariablePC > pOtherVariable->m_lowVariablePC) &&
-                                    (pCurrentVariable->m_lowVariablePC < pOtherVariable->m_lowVariablePC))
+                                        (pCurrentVariable->m_lowVariablePC < pOtherVariable->m_lowVariablePC))
                                 {
                                     // Truncate it:
                                     pCurrentVariable->m_highVariablePC = pOtherVariable->m_lowVariablePC;
@@ -932,7 +963,7 @@ void CodeScope<AddrType, LineType, VarLocationType>::IntersectVariablesInScope()
                             if (pOtherVariable->m_highVariablePC >= maxAddr)
                             {
                                 if ((pOtherVariable->m_highVariablePC > pCurrentVariable->m_lowVariablePC) &&
-                                    (pOtherVariable->m_lowVariablePC < pCurrentVariable->m_lowVariablePC))
+                                        (pOtherVariable->m_lowVariablePC < pCurrentVariable->m_lowVariablePC))
                                 {
                                     // Truncate it:
                                     pOtherVariable->m_highVariablePC = pCurrentVariable->m_lowVariablePC;
