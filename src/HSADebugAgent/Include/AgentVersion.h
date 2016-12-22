@@ -8,6 +8,6 @@
 #ifndef AGENT_VERSION_H_
 #define AGENT_VERSION_H_
 
-const std::string gs_HSAIL_GDB_VERSION = "1.0.";
+const std::string gs_HSAIL_GDB_VERSION = "1.4.";
 
 #endif // AGENT_VERSION_H_

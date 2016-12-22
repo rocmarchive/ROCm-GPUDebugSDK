@@ -33,7 +33,14 @@
 namespace HwDbgAgent
 {
 
-static pthread_t DebugEventHandler ;
+static const pthread_t gs_UNKOWN_PTHREAD_HANDLER = UINT64_MAX;
+
+// We initialize the DebugEventHandler to gs_UNKOWN_PTHREAD_HANDLER since in Fedora
+// pthread_join segfaults when the pthread handle is not present.
+//
+// In Ubuntu,  the behavior is much better and returns
+// the ESRCH code as expected when the handle is not available.
+static pthread_t DebugEventHandler = gs_UNKOWN_PTHREAD_HANDLER;
 
 /// Check if the fifo is empty.
 /// \todo The problem with this function is that there is a side effect
@@ -150,29 +157,38 @@ HsailAgentStatus WaitForDebugThreadCompletion()
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
     AGENT_LOG("WaitForDebugThreadCompletion: Start waiting for debug thread completion");
 
-    int pthreadStatus =  pthread_join(DebugEventHandler, nullptr);
-
-    AGENT_LOG("WaitForDebugThreadCompletion: Finished waiting for debug thread completion");
-
-    // ESRCH is reasonable since we can call BeginDebugging
-    // and then call enddebugging, without starting the debug thread
-    // This case could come up if we went pass a HSAIL dispatch without setting or hitting
-    // the function breakpoint.
-    //
-    // ESRCH can also come up when we are in predispatchcallback for the first time
-    // and haven't yet started the debug thread
-    if (pthreadStatus == 0 || pthreadStatus == ESRCH)
+    // Do the wait only if a handle was created.
+    if (DebugEventHandler != gs_UNKOWN_PTHREAD_HANDLER)
     {
-        status = HSAIL_AGENT_STATUS_SUCCESS;
+        int pthreadStatus =  pthread_join(DebugEventHandler, nullptr);
+
+        AGENT_LOG("WaitForDebugThreadCompletion: Finished waiting for debug thread completion");
+
+        // ESRCH is reasonable since we can call BeginDebugging
+        // and then call enddebugging, without starting the debug thread
+        // This case could come up if we went pass a HSAIL dispatch without setting or hitting
+        // the function breakpoint.
+        //
+        // ESRCH can also come up when we are in predispatchcallback for the first time
+        // and haven't yet started the debug thread
+        if (pthreadStatus == 0 || pthreadStatus == ESRCH)
+        {
+            status = HSAIL_AGENT_STATUS_SUCCESS;
+        }
+        else
+        {
+            AGENT_ERROR("WaitForDebugThreadCompletion: pthread_join error: " << pthreadStatus);
+
+        }
+
+        AGENT_LOG("WaitForDebugThreadCompletion: pthread_join returned: " << pthreadStatus);
     }
     else
     {
-        AGENT_ERROR("WaitForDebugThreadCompletion: pthread_join error: " << pthreadStatus);
+        AGENT_LOG("WaitForDebugThreadCompletion: Debug thread handle not initialized, skip pthread_join()");
 
+        status = HSAIL_AGENT_STATUS_SUCCESS;
     }
-
-    AGENT_LOG("WaitForDebugThreadCompletion: pthread_join returned: " << pthreadStatus);
-
     return status;
 }
 

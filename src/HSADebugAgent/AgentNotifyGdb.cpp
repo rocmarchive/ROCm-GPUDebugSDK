@@ -173,8 +173,6 @@ void AgentNotifyGDB()
 // GDB will use the binary to set up debug facilities
 // \todo Add the hl symbol and the ll symbol
 HsailAgentStatus AgentNotifyNewBinary(const size_t                        binarySize,
-                                      const std::string&                  hlSymbolName,
-                                      const std::string&                  llSymbolName,
                                       const std::string&                  kernelName,
                                       const hsa_kernel_dispatch_packet_t* pAqlPacket,
                                       const uint64_t                      queueID,

@@ -55,7 +55,7 @@ private:
     /// Max size for the momentary breakpoints shared memory location
     size_t m_momentaryBPShmMaxSize;
 
-    /// Check for duplicate source and function breakpoints
+    /// Check for duplicate source and function breakpoints from the input packet.
     /// \return true if any duplicates present
     bool IsDuplicatesPresent(const HwDbgContextHandle  DbeContextHandle,
                              const HsailCommandPacket& ipPacket,
@@ -81,9 +81,11 @@ private:
     /// \return true iff there's a PC breakpoint on the value indicated
     bool IsPCBreakpoint(const HwDbgCodeAddress pc) const;
 
-    /// Utility to check if a PC already exists in the breakpoint vectors
+    /// Check if the PC exists in any of the AgentBreakpoint, used to check if
+    /// the multiple lines or gdb breakpoint IDs have resolved to the same PC
+    ///
     /// \param[in] m_pc                 An input PC
-    /// \param[out duplicatePosition    The location of the breakpoint with the PC
+    /// \param[out duplicatePosition    Position of the AgentBreakpoint object that has the duplicate
     bool IsPCExists(const HwDbgCodeAddress inputPC, int& duplicatePosition) const;
 
     /// Utility to get a the breakpoint from a GDB ID

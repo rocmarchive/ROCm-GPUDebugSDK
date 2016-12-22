@@ -142,7 +142,6 @@ HsailAgentStatus AgentBreakpoint::UpdateNotificationPayload(HsailNotificationPay
     return status;
 }
 
-// \todo Allow this interface to take in PC and change breakpoint state here too
 HsailAgentStatus AgentBreakpoint::CreateBreakpointDBE(const HwDbgContextHandle dbeHandle,
                                                       const GdbBkptId          gdbID)
 {
@@ -260,7 +259,7 @@ HsailAgentStatus AgentBreakpoint::DeleteBreakpointDBE(const HwDbgContextHandle d
             {
                 m_GdbId.erase(m_GdbId.begin() + i);
                 AGENT_LOG("DeleteBreakpointDBE: Remove element " << i  <<
-                          "\t GDB ID Vector Len = " << m_GdbId.size()) ;
+                          "\t New GDB ID Vector Len = " << m_GdbId.size()) ;
             }
             else
             {

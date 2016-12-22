@@ -34,10 +34,6 @@ private:
     /// Size of binary
     size_t m_binarySize;
 
-    /// Symbols we dig out of the binary
-    std::string m_llSymbolName;
-    std::string m_hlSymbolName;
-
     /// The dispatched kernel name
     std::string m_kernelName;
 
@@ -60,8 +56,8 @@ private:
     /// Disable assignment operator
     AgentBinary& operator=(const AgentBinary&);
 
-    /// Get the HL and LL symbols
-    bool GetDebugSymbolsFromBinary();
+    /// Demangle the input kernel name using c++filt
+    HsailAgentStatus DemangleKernelName(const std::string& ipKernelName, std::string& demangledNameOut) const;
 
     /// Write the binary to shared mem
     /// \param[in] shmKey the key for shared memory used where the binary will be written  to

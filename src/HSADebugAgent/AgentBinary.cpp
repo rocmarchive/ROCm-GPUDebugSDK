@@ -7,7 +7,11 @@
 //==============================================================================
 #include <cassert>
 #include <cstring>
+#include <string>
 #include <cstdlib>
+#include <errno.h>
+#include <fstream>
+#include <iostream>
 
 #include <hsa_ext_amd.h>
 #include <amd_hsa_kernel_code.h>
@@ -32,8 +36,6 @@ namespace HwDbgAgent
 AgentBinary::AgentBinary():
     m_pBinary(nullptr),
     m_binarySize(0),
-    m_llSymbolName(""),
-    m_hlSymbolName(""),
     m_kernelName(""),
     m_codeObjBufferShmKey(-1),
     m_codeObjBufferMaxSize(0),
@@ -80,60 +82,83 @@ AgentBinary::~AgentBinary()
     }
 }
 
-// Read the binary buffer and get the HL and LL symbol names
-bool AgentBinary::GetDebugSymbolsFromBinary()
+/// Demangle the input kernel name
+HsailAgentStatus AgentBinary::DemangleKernelName(const std::string& ipKernelName,
+                                                       std::string& demangledNameOut) const
 {
+    HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
+    // The strings are saved to a file and then piped in and out to c++filt
+    const std::string MANGLED_STRING_FILE="/tmp/mangled_kernel";
+    const std::string DEMANGLED_STRING_FILE="/tmp/demangled_kernel";
 
-    if ((nullptr == m_pBinary) || (0 == m_binarySize))
+    if (ipKernelName.empty())
     {
-        return false;
+        return status;
     }
 
-    // Get the symbol list:
-    std::vector<std::pair<std::string, uint64_t>> elfSymbols;
-    ExtractSymbolListFromELFBinary(m_pBinary, m_binarySize, elfSymbols);
+    demangledNameOut.clear();
 
-    // No symbols = nothing found:
-    if (elfSymbols.empty())
+    // Just use the mangled kernel name if C++filt is not on system
+    // The below check for a non-zero is correct.
+    // if c++filt is not found, which will return some positive number
+    if (system("which c++filt > /dev/null 2>&1"))
     {
-        return false;
+        int err_no = errno;
+        AGENT_LOG("DemangleKernelName: errno of which c++filt: " << err_no
+                    << "errno: " << strerror(err_no));
+
+        demangledNameOut.assign(ipKernelName);
+        AGENT_OP("c++filt could not be found in the PATH, kernel names will remain mangled");
+        status = HSAIL_AGENT_STATUS_SUCCESS;
+        return status;
     }
 
-    bool isllSymbolFound = false;
-
-    // The matchable string
-    static const std::string kernelNamePrefix1 = "__debug_isa__";   // ISA DWARF symbol
-    static const size_t kernelNamePrefix1Length = kernelNamePrefix1.length();   // Pre-calculate string lengths
-
-    // Iterate the symbols to look for matches:
-    const size_t symbolsCount = elfSymbols.size();
-
-    for (size_t i = 0; symbolsCount > i; ++i)
+    std::ofstream out(MANGLED_STRING_FILE);
+    if (!out.is_open())
     {
-        const std::string& curSym = elfSymbols[i].first;
+        return status;
+    }
+    else
+    {
+        std::string ipKernelNameWithUnderscore(ipKernelName);
 
-        if (0 == curSym.compare(0, kernelNamePrefix1Length, kernelNamePrefix1))
+        // If there is no underscore in the beginning, add one and then call c++filt
+        // This is a work-around to a runtime issue where the first character of the
+        // mangled name is missing, based on name mangling conventions in C++
+        // the first 2 characters are _Z
+        if(ipKernelName[0] == 'Z')
         {
-            // Found a level 1 match (the first one). It overrides any other matches, so return it!
-            m_llSymbolName.assign(curSym);
-            isllSymbolFound = true;
-            break;
+            std::string::iterator it;
+            it = ipKernelNameWithUnderscore.insert(ipKernelNameWithUnderscore.begin(),'_');
+        }
+
+        AGENT_LOG("Kernel name passed to c++filt " << ipKernelNameWithUnderscore);
+
+        out << ipKernelNameWithUnderscore;
+        out.close();
+
+        std::stringstream demangleCommand;
+        // The -p option removes the parameter list from the demangled name
+        demangleCommand << "c++filt -p"<< " < " << MANGLED_STRING_FILE << " > " << DEMANGLED_STRING_FILE;
+        int retCode = system(demangleCommand.str().c_str());
+        int err_no = errno;
+        AGENT_LOG("DemangleKernelName: Return code: " << retCode << "errno: " << strerror(err_no));
+
+
+        std::ifstream inputStream(DEMANGLED_STRING_FILE);
+        if (inputStream.is_open())
+        {
+            getline(inputStream, demangledNameOut);
+            status = HSAIL_AGENT_STATUS_SUCCESS;
+
+            AGENT_LOG("Demangled kernel name: " << demangledNameOut);
+
+            // Delete tmp files
+            AgentDeleteFile(MANGLED_STRING_FILE.c_str());
+            AgentDeleteFile(DEMANGLED_STRING_FILE.c_str());
         }
     }
-
-    // The HL symbol is always the same
-    m_hlSymbolName.assign("__debug_brig__");
-
-    if (isllSymbolFound)
-    {
-        return true;
-    }
-
-    AGENT_ERROR("GetDebugSymbolsFromBinary:Could not HL and LL symbols correctly");
-
-    return false;
-
-
+    return status;
 }
 
 // Call the DBE and set up the buffer
@@ -180,13 +205,14 @@ HsailAgentStatus AgentBinary::PopulateBinaryFromDBE(HwDbgContextHandle dbgContex
     }
 
     // get the kernel name for the active dispatch
-    const char* pKernelName(nullptr);
-    dbeStatus = HwDbgGetDispatchedKernelName(dbgContextHandle, &pKernelName);
+    std::string demangledKernelName;
+    const char* pMangledKernelName(nullptr);
+    dbeStatus = HwDbgGetDispatchedKernelName(dbgContextHandle, &pMangledKernelName);
     assert(dbeStatus == HWDBG_STATUS_SUCCESS);
-    assert(pKernelName != nullptr);
+    assert(pMangledKernelName != nullptr);
 
     if (dbeStatus != HWDBG_STATUS_SUCCESS ||
-        pKernelName == nullptr)
+        pMangledKernelName == nullptr)
     {
         AGENT_ERROR("PopulateBinaryFromDBE: Could not get the name of the kernel");
         status = HSAIL_AGENT_STATUS_FAILURE;
@@ -194,10 +220,12 @@ HsailAgentStatus AgentBinary::PopulateBinaryFromDBE(HwDbgContextHandle dbgContex
     }
     else
     {
-        status = HSAIL_AGENT_STATUS_SUCCESS;
+        std::string mangledKernelName(pMangledKernelName);
+        status =  DemangleKernelName(mangledKernelName, demangledKernelName);
     }
 
-    m_kernelName.assign(pKernelName);
+
+    m_kernelName.assign(demangledKernelName);
 
     AGENT_LOG("PopulateBinaryFromDBE: Kernel Name found " << m_kernelName);
 
@@ -240,7 +268,6 @@ HsailAgentStatus AgentBinary::NotifyGDB(const hsa_kernel_dispatch_packet_t* pAql
     }
 
     status = AgentNotifyNewBinary(m_binarySize,
-                                  m_hlSymbolName, m_llSymbolName,
                                   m_kernelName,
                                   pAqlPacket,
                                   queueID,

@@ -182,7 +182,6 @@ bool AgentBreakpointManager::GetBreakpointFromPC(const HwDbgCodeAddress pc,
     return retVal;
 }
 
-// Returns true if the same PC exists in the breakpoint vector presently
 bool AgentBreakpointManager::IsPCExists(const HwDbgCodeAddress inputPC,
                                               int&             duplicatePosition) const
 {
@@ -198,10 +197,6 @@ bool AgentBreakpointManager::IsPCExists(const HwDbgCodeAddress inputPC,
             {
                 if (bp->m_pc == inputPC)
                 {
-                    AGENT_OP("HSAIL-GDB detected a duplicate breakpoint\n"
-                            "Breakpoint " << bp->m_GdbId.at(0) << " already exists at PC 0x" << std::hex << inputPC << std::dec << "\n"
-                            "Use breakpoint index " << bp->m_GdbId.at(0) << " "
-                            "to enable/disable/delete breakpoints at PC 0x" << std::hex << inputPC << std::dec);
 
                     duplicatePosition = i;
 
@@ -212,7 +207,7 @@ bool AgentBreakpointManager::IsPCExists(const HwDbgCodeAddress inputPC,
         }
         else
         {
-            // We should not have any nullptr elements in the vector, sine when we free
+            // We should not have any nullptr elements in the vector, since when we free
             // the AgentBreakpoint, we also remove it from m_pBreakpoints
             AGENT_ERROR("IsPCDuplicate: bp was nullptr");
         }
@@ -261,20 +256,44 @@ bool AgentBreakpointManager::IsDuplicatesPresent(const HwDbgContextHandle  dbeCo
                                                  const HsailCommandPacket& ipPacket,
                                                  const HsailBkptType       ipType)
 {
-    // Check for duplicate source breakpoints
-    int duplicatePosition;
+    // Check for source breakpoints that map to the same PC
+    int duplicatePosition = INT32_MAX;
+    // Needed for checking duplicates in gdb id, breakpoint adjustments
+    int duplicatePositionCheck = INT32_MAX;
     bool isDuplicatePresent = false;
 
     if (ipType == HSAIL_BREAKPOINT_TYPE_PC_BP)
     {
-        if (IsPCExists(ipPacket.m_pc, duplicatePosition))
+        // This may be possible since gdb may send the same breakpoint command more than
+        // once when it clears the breakpoint cache and then also winds up calling the adjust
+        // function. Ideally gdb should be fixed not to do this.
+        if (IsPCExists(ipPacket.m_pc, duplicatePosition) &&
+            GetBreakpointFromGDBId(ipPacket.m_gdbBreakpointID, &duplicatePositionCheck))
+        {
+            // Check for duplicate source breakpoints
+            AGENT_LOG("CreateBreakpoint: Detected the same command being sent by GDB again, do nothing");
+
+            // It is a true duplicate
+            if (duplicatePosition == duplicatePositionCheck)
+            {
+                isDuplicatePresent = true;
+            }
+
+        }
+        else if (IsPCExists(ipPacket.m_pc, duplicatePosition))
         {
             // Handle the case that we have a breakpoint at a certain PC and we see another
             // gdb id at the same PC
-
+            //
             // Check for duplicate source breakpoints
             AGENT_LOG("CreateBreakpoint: Detected a duplicate Kernel Source breakpoint\n" <<
                        "Append GDB ID " << ipPacket.m_gdbBreakpointID << " to m_GdbId vector");
+
+            AGENT_OP("Detected a duplicate breakpoint\n"
+                    "Breakpoint " << m_pBreakpoints.at(duplicatePosition)->m_GdbId.at(0) <<
+                    " already exists at PC 0x" << std::hex << ipPacket.m_pc << std::dec << "\n" <<
+                    "Use breakpoint index " << m_pBreakpoints.at(duplicatePosition)->m_GdbId.at(0) << " "
+                    "to enable/disable/delete breakpoints at PC 0x" << std::hex << ipPacket.m_pc << std::dec);
 
             m_pBreakpoints.at(duplicatePosition)->m_GdbId.push_back(ipPacket.m_gdbBreakpointID);
             isDuplicatePresent = true;
@@ -283,8 +302,8 @@ bool AgentBreakpointManager::IsDuplicatesPresent(const HwDbgContextHandle  dbeCo
         {
             // Handle the case that we have a breakpoint at a certain PC and we see
             // the same gdb id at a different PC, this could happen if the same code
-            // object is dispatched multiple times, we'd have a different mem addr
-            // if a new AQL packet is dispatched.
+            // object is dispatched multiple times, we'd have a different base memory address
+            // where the segment is loaded when a new AQL packet is dispatched.
 
             m_pBreakpoints.at(duplicatePosition)->m_pc = ipPacket.m_pc;
             m_pBreakpoints.at(duplicatePosition)->CreateBreakpointDBE(dbeContextHandle,

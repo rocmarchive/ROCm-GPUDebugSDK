@@ -220,6 +220,7 @@ HsailAgentStatus  AgentISABuffer::DisassembleLLVMObjDump(const size_t size, cons
     // Using ">" when redirecting will clear the file before writing
 
     std::stringstream disassembleCommand;
+    disassembleCommand.clear();
     disassembleCommand << llvmCmdFileNameToUse << " "
                        << llvmCmdOptions << " "
                        << codeObjFilename << " > "

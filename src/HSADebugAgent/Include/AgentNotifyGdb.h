@@ -29,8 +29,6 @@ HsailAgentStatus AgentNotfiyNewActiveWaves(const int numActiveWaves);
 /// the GDB is notified multiple times with for the same binary or
 /// 1 binary doesn't describe one dispatch sufficiently in the future.
 HsailAgentStatus AgentNotifyNewBinary(const size_t                        binarySize,
-                                      const std::string&                  hlSymbolName,
-                                      const std::string&                  llSymbolName,
                                       const std::string&                  kernelName,
                                       const hsa_kernel_dispatch_packet_t* pAqlPacket,
                                       const uint64_t                      queueID,
