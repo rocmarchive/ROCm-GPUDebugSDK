@@ -27,14 +27,14 @@
 #include <assert.h>
 #include <queue>
 #include <stack>
-#include <string.h>
+#include <cstring>
+#include <string>
 
-/// HSA:
-// #include <hsa_dwarf.h> // include this header when it is added to the HSA promoted libraries
 
 /// Local:
-#include <DbgInfoDwarfParser.h>
-#include <DbgInfoUtils.h>
+#include "DbgInfoLogging.h"
+#include "DbgInfoDwarfParser.h"
+#include "DbgInfoUtils.h"
 
 //@{
 /// \def [US] 18/11/10: the BSD implementation of DWARF is missing some values in the header file:
@@ -61,13 +61,16 @@
 #define DW_AT_HSA_brig_offset       0x3004 /* Used for ISA DWARF only */
 
 #define DW_LANG_HSA_Assembly      0x9000
+
 /* values for DWARF DW_AT_address_class */
+/* The corresponding address space values in the Compiler AMD GPU Code Gen are defined in lib/Target/AMDGPU/AMDGPU.h (AMDGPUAS::AddressSpaces enum)*/
 enum Amd_HSA_address_class
 {
     Amd_HSA_Private = 0,
     Amd_HSA_Global = 1,
     Amd_HSA_Readonly = 2,
-    Amd_HSA_Group = 3
+    Amd_HSA_Group = 3,
+    Amd_HSA_Flat = 4
 };
 //@}
 
@@ -92,6 +95,31 @@ enum Amd_HSA_address_class
     }
 
 using namespace HwDbg;
+
+
+// Todo incomplete switch case
+static const std::string GetOPName (const Dwarf_Small val)
+{
+    switch (val)
+    {
+        case DW_OP_deref:
+            return "DW_OP_deref";
+        case DW_OP_fbreg:
+            return "DW_OP_fbreg";
+        case DW_OP_constu:
+            return "DW_OP_constu";
+        case DW_OP_plus_uconst:
+            return "DW_OP_plus_uconst";
+        case DW_OP_addr:
+            return "DW_OP_addr";
+        case DW_OP_xderef:
+            return "DW_OP_xderef";
+        case DW_OP_swap:
+            return "DW_OP_swap";
+        default:
+            return "DW_OP";
+    }
+}
 
 /// -----------------------------------------------------------------------------------------------
 /// Initialize
@@ -254,15 +282,19 @@ bool DbgInfoDwarfParser::FillLineMappingFromDwarf(Dwarf_Die cuDIE,
 #define replaceWith '/'
 #endif
 
-                        while (std::string::npos != (pos = sourceFilePathAsString.find(replaceChar)))
+                        while ( std::string::npos !=
+                                (pos = sourceFilePathAsString.find(replaceChar))
+                               )
                         {
                             sourceFilePathAsString[pos++] = replaceWith;
                         }
 
-                        FileLocation fileLocation(sourceFilePathAsString, static_cast<HwDbgUInt64>(lineNum));
+                        FileLocation fileLocation(sourceFilePathAsString,
+                                                  static_cast<HwDbgUInt64>(lineNum));
                         // Success if we have successfully added the mapping or if the address is 0:
-                        bool addSucceeded = o_lineNumberMapping.AddLineMapping(fileLocation, static_cast<DwarfAddrType>(lineAddress))
-                                            || (0 == lineAddress);
+                        bool retCode = o_lineNumberMapping.AddLineMapping(fileLocation,
+                                                           static_cast<DwarfAddrType>(lineAddress));
+                        bool addSucceeded = retCode || (0 == lineAddress);
                         HWDBG_ASSERT(addSucceeded);
                     }
                 }
@@ -304,6 +336,7 @@ void DbgInfoDwarfParser::FillCodeScopeFromDwarf(Dwarf_Die           programDIE,
     FillScopeName(programDIE, pDwarf, o_scope.m_scopeName);
 
     // Get the hsa data:
+    // This is not needed with HCC source level debugging support
     FillScopeHsaData(programDIE, pDwarf, o_scope);
 
     // Get the address ranges:
@@ -838,7 +871,9 @@ void DbgInfoDwarfParser::FillScopeHsaData(Dwarf_Die programDIE, Dwarf_Debug pDwa
                     for (int j = 0; j < numberOfLocationsOperations; j++)
                     {
                         Dwarf_Loc& rCurrentLocationOperation = pLocationRecord[j];
-                        UpdateLocationWithDWARFData(rCurrentLocationOperation, *o_scope.m_pWorkitemOffset, false);
+                        UpdateLocationWithDWARFData(rCurrentLocationOperation,
+                                                    *o_scope.m_pWorkitemOffset,
+                                                    false);
                     }
 
                     isFirstLocation = false;
@@ -912,7 +947,9 @@ void DbgInfoDwarfParser::FillFrameBase(Dwarf_Die programDIE, Dwarf_Debug pDwarf,
                 o_scope.m_pFrameBase->Initialize();
 
                 // Get the location:
-                UpdateLocationWithDWARFData(pFramePointerLocation->ld_s[0], *o_scope.m_pFrameBase, false);
+                UpdateLocationWithDWARFData(pFramePointerLocation->ld_s[0],
+                                            *o_scope.m_pFrameBase,
+                                            false);
 
                 // We expect the frame pointer to be stored in a direct register with no added offset:
                 HWDBG_ASSERT(o_scope.m_pFrameBase->m_locationRegister == DwarfVariableLocation::LOC_REG_REGISTER);
@@ -940,12 +977,12 @@ void DbgInfoDwarfParser::FillFrameBase(Dwarf_Die programDIE, Dwarf_Debug pDwarf,
 }
 
 /// ---------------------------------------------------------------------------
-/// DbgInfoDwarfParser::GetLocationFromDWARFData
-/// \brief Description: Parses the data from the Dwarf_Loc struct to a ValueLocationType object.
-/// \param[in] atom - indicates which register this is and whether its direct or indirect
-/// \param[in] number1 - the register number to return in the case of stack offset or extended registers
-/// \param[out] o_locationType - output Parameter the location type.
-/// \return the register number
+/// DbgInfoDwarfParser::UpdateLocationWithDWARFData
+/// \brief Description: Parses the data from the Dwarf_Loc struct to a VariableLocation object.
+/// \param[in] locationRegister - Dwarf location atom
+/// \param[out] o_locationType - The variable location object
+/// \param[in] isMember - Flag for member
+/// \return void
 /// ---------------------------------------------------------------------------
 void DbgInfoDwarfParser::UpdateLocationWithDWARFData(const Dwarf_Loc& locationRegister,
                                                      DwarfVariableLocation& io_location, bool isMember)
@@ -1188,6 +1225,10 @@ void DbgInfoDwarfParser::UpdateLocationWithDWARFData(const Dwarf_Loc& locationRe
         case DW_OP_lt:
         case DW_OP_ne:
         case DW_OP_skip:
+            DBGINFO_LOG("Unsupported operation " << "0x" <<
+                        std::hex << static_cast<uint32_t>(locationRegister.lr_atom) << std::dec);
+            DBGINFO_LOG("We do not currently  support operations which require maintaining "
+                        "an expression stack");
             // We do not currently support these operations, which require maintaining an expression stack:
             HWDBG_ASSERT(false);
             break;
@@ -1539,6 +1580,10 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE,
                             o_variable.m_varIndirectionDetail = HWDBGINFO_VINDD_AMD_GPU_LDS_POINTER;
                             break;
 
+                        case Amd_HSA_Flat:
+                            o_variable.m_varIndirectionDetail = HWDBGINFO_VINDD_AMD_GPU_FLAT_POINTER;
+                            break;
+
                         /*
                         case Amd_HSA_Region:
                             o_variable.m_varIndirectionDetail = HWDBGINFO_VINDD_AMD_GPU_GDS_POINTER;
@@ -1546,6 +1591,8 @@ void DbgInfoDwarfParser::FillTypeNameAndDetailsFromTypeDIE(Dwarf_Die typeDIE,
                         */
 
                         default:
+                            DBGINFO_LOG("Unknown address class: " << addressClassAsDWUnsigned << "\t"
+                                        "variable m_varName: " << o_variable.m_varName);
                             // Unexpected Value!
                             HWDBG_ASSERT(false);
                             foundIndirectionDetail = false;
@@ -2014,15 +2061,27 @@ bool DbgInfoDwarfParser::InitializeWithBinary(const KernelBinary& kernelBinary,
                 Dwarf_Die cuDIE = nullptr;
                 rc = dwarf_siblingof(pDwarf, nullptr, &cuDIE, &err);
 
+                // This is the location of the CU DIE.
+                // We need to get the directory name from here to possibly deal with HSADBG-855
+
                 if (rc == DW_DLV_OK)
                 {
-                    FillCodeScopeFromDwarf(cuDIE, firstSourceFileRealPath, pDwarf, nullptr, DwarfCodeScope::DID_SCT_COMPILATION_UNIT,
+                    // Start recursion to fill code scope
+                    FillCodeScopeFromDwarf(cuDIE,
+                                           firstSourceFileRealPath,
+                                           pDwarf,
+                                           nullptr,
+                                           DwarfCodeScope::DID_SCT_COMPILATION_UNIT,
                                            o_scope);
 
-                    // Use the CU DIE to get the line number information. This needs to happen after the programs are
-                    // initialized, since each entry must be associated with a program:
+                    // Use the CU DIE to get the line number information.
+                    // This needs to happen after the programs are initialized, since each
+                    // entry must be associated with a program:
                     DwarfLineMapping lineNumberMapping;
-                    bool rcLn = FillLineMappingFromDwarf(cuDIE, firstSourceFileRealPath, pDwarf, o_lineNumberMapping);
+                    bool rcLn = FillLineMappingFromDwarf(cuDIE,
+                                                        firstSourceFileRealPath,
+                                                        pDwarf,
+                                                        o_lineNumberMapping);
                     HWDBG_ASSERT(rcLn);
 
                     // Fill addresses from mapping:
@@ -2090,7 +2149,7 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
     // Check if const:
     bool isConst = o_variableData.IsConst();
 
-    // Locations:
+    // Get the Location expression:
     Dwarf_Attribute varLocDescAsAttribute = nullptr;
     int rc = dwarf_attr(variableDIE,
                         isMember ? DW_AT_data_member_location : DW_AT_location, // Choose attribute based on input
@@ -2124,7 +2183,9 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
         {
             // Get the start scope attribute, if it is available:
             Dwarf_Unsigned startScopeAsDwarfUnsigned = 0;
-            int rcHasStartScope = dwarf_attrval_unsigned(variableDIE, DW_AT_start_scope, &startScopeAsDwarfUnsigned, &err);
+            int rcHasStartScope = dwarf_attrval_unsigned(variableDIE,
+                                                         DW_AT_start_scope,
+                                                         &startScopeAsDwarfUnsigned, &err);
             DwarfAddrType startScope = 0;
 
             if (rcHasStartScope == DW_DLV_OK)
@@ -2135,7 +2196,9 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
 
             // Get the resource attribute, if it is available:
             Dwarf_Unsigned resourceAsDwarfUnsigned = 0;
-            int rcHasResource = dwarf_attrval_unsigned(variableDIE, DW_AT_AMDIL_resource, &resourceAsDwarfUnsigned, &err);
+            int rcHasResource = dwarf_attrval_unsigned(variableDIE,
+                                                       DW_AT_AMDIL_resource,
+                                                       &resourceAsDwarfUnsigned, &err);
 
             // If this variable has at least one location:
             bool isFirstLocation = true;
@@ -2149,6 +2212,7 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
                 {
                     // Note that board older than SI might not produce this attribute at all:
                     variableCurrentLocation.m_locationResource = (HwDbgUInt64)resourceAsDwarfUnsigned;
+                    DBGINFO_LOG("We should not see DW_AT_AMDIL_resouce anymore");
                 }
 
                 // <Perhaad> It needs to be clarified why this is done if only !member
@@ -2175,27 +2239,72 @@ void DbgInfoDwarfParser::FillVariableWithInformationFromDIE(Dwarf_Die variableDI
 
                     std::stack<Dwarf_Loc> currentLocStack;
 
+                    DBGINFO_LOG("=======Start LocList processing");
+
                     for (int j = 0; j < numberOfLocationsOperations; j++)
                     {
                         Dwarf_Loc& rCurrentLocationOperation = pLocationRecord[j];
 
-                        if (rCurrentLocationOperation.lr_atom == DW_OP_constu)
+                        DBGINFO_LOG("j = " << j << "\tProcessing lr_atom " <<
+                                    GetOPName(rCurrentLocationOperation.lr_atom) << " 0x" <<
+                                    std::hex << static_cast<uint32_t>(rCurrentLocationOperation.lr_atom) <<
+                                    std::dec);
+
+                        if (rCurrentLocationOperation.lr_atom == DW_OP_fbreg)
                         {
+                            DBGINFO_LOG("j = " << j << "\t Push an entry");
                             currentLocStack.push(rCurrentLocationOperation);
+
+                            // Does this need to be within the xdref check above ?
+                            UpdateLocationWithDWARFData(rCurrentLocationOperation,
+                                                        variableCurrentLocation,
+                                                        isMember);
+
+                        }
+                        else if (rCurrentLocationOperation.lr_atom == DW_OP_constu)
+                        {
+                            DBGINFO_LOG("j = " << j << "\t Push an entry");
+                            currentLocStack.push(rCurrentLocationOperation);
+                        }
+                        else if (rCurrentLocationOperation.lr_atom == DW_OP_swap)
+                        {
+                            Dwarf_Loc oldTop =  currentLocStack.top();
+                            currentLocStack.pop();
+                            Dwarf_Loc oldSecondValue =  currentLocStack.top();
+                            currentLocStack.pop();
+
+                            // Swap the two entries,
+                            currentLocStack.push(oldTop);
+                            currentLocStack.push(oldSecondValue);
                         }
                         else
                         {
                             if (rCurrentLocationOperation.lr_atom == DW_OP_xderef)
                             {
-                                variableCurrentLocation.m_locationOffset = (unsigned int)(currentLocStack.top().lr_number);
-                                currentLocStack.pop();
-                                variableCurrentLocation.m_isaMemoryRegion = (unsigned int)(currentLocStack.top().lr_number);
-                                currentLocStack.pop();
+                                // For xderef, we should be able to pop twice
+                                if (currentLocStack.size() >= 2)
+                                {
+                                    variableCurrentLocation.m_locationOffset = (unsigned int)(currentLocStack.top().lr_number);
+                                    currentLocStack.pop();
+                                    variableCurrentLocation.m_isaMemoryRegion = (unsigned int)(currentLocStack.top().lr_number);
+                                    currentLocStack.pop();
+                                }
+                                else
+                                {
+                                    DBGINFO_LOG("Error processing DW_OP_xderef");
+                                    DBGINFO_LOG("Number of Location Operations: "
+                                                << numberOfLocationsOperations );
+                                }
+
                             }
 
-                            UpdateLocationWithDWARFData(rCurrentLocationOperation, variableCurrentLocation, isMember);
+                            // Does this need to be within the xdref check above ?
+                            UpdateLocationWithDWARFData(rCurrentLocationOperation,
+                                                        variableCurrentLocation,
+                                                        isMember);
                         }
-                    }
+                    } // end iterating over loclist
+                    DBGINFO_LOG("=======End LocList processing");
 
                     if (o_variableData.m_varSize > variableCurrentLocation.m_pieceSize)
                     {

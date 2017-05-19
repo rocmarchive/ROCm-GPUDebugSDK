@@ -61,14 +61,6 @@ size_t AgentSegmentLoader::FindExecutedSegment() const
     return SIZE_MAX;
 }
 
-const HwDbgLoaderSegmentDescriptor* AgentSegmentLoader::GetLoadedSegmentBuffer() const
-{
-    return m_pLoadedSegments;
-}
-const size_t AgentSegmentLoader::GetNumLoadedSegments() const
-{
-    return m_numLoadedSegments;
-}
 
 HsailAgentStatus AgentSegmentLoader::UpdateLoadedSegments()
 {
@@ -96,10 +88,8 @@ HsailAgentStatus AgentSegmentLoader::UpdateLoadedSegments()
             status = HSAIL_AGENT_STATUS_SUCCESS;
         }
 
-
         status = WriteToSharedMemory();
     }
-
 
     return status;
 }
@@ -157,11 +147,22 @@ HsailAgentStatus AgentSegmentLoader::WriteToSharedMemory() const
 void AgentSegmentLoader::AddElfVAForEachSegmentDescriptor(HsailSegmentDescriptor* pSegments) const
 {
 
-    if (pSegments != nullptr && m_numLoadedSegments > 0)
+    if (pSegments != nullptr &&
+        m_numLoadedSegments > 0 &&
+        m_pLoadedSegments->pCodeObjectStorageBase != nullptr)
     {
         // Get elf structure at the start of the file, null checked above
         const Elf64_Ehdr* pElfEhDr = static_cast<const Elf64_Ehdr*>(m_pLoadedSegments->pCodeObjectStorageBase);
         size_t phdrOffsetinBytes = static_cast<size_t>(pElfEhDr->e_phoff);
+
+        AGENT_LOG("Location of pPhDrs array (in bytes): phdrOffsetinBytes " << phdrOffsetinBytes);
+
+        if (phdrOffsetinBytes > m_pLoadedSegments->codeObjectStorageSize)
+        {
+            AGENT_ERROR("The value of phdrOffsetinBytes seems invalid \n" <<
+                        "phdrOffsetinBytes = " << phdrOffsetinBytes << "\t"
+                        "but code object size = " << m_pLoadedSegments->codeObjectStorageSize);
+        }
 
         // Get location of the list of pPhDrs array within the CodeObject ELF
         Elf64_Phdr* pPhdrList = (Elf64_Phdr*)(
@@ -169,6 +170,7 @@ void AgentSegmentLoader::AddElfVAForEachSegmentDescriptor(HsailSegmentDescriptor
 
         // Size of the pPhDrs array, obtained from the elf structure at the start of the file
         size_t numTotalPhdrs = static_cast<size_t>(pElfEhDr->e_phnum );
+        AGENT_LOG("No of total Phdrs: " << numTotalPhdrs);
 
         // For each of the input descriptors
         for (size_t i=0; i< m_numLoadedSegments; i++)

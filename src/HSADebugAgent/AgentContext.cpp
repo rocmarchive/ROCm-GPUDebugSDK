@@ -164,6 +164,8 @@ HsailAgentStatus AgentContext::BeginDebugging(const hsa_agent_t                 
     m_gridSize.y = pAqlPacket->grid_size_y;
     m_gridSize.z = pAqlPacket->grid_size_z;
 
+    SetActiveDevice(agent.handle);
+
     AGENT_LOG("Dispatch Dimensions WG:"
               << m_workGroupSize.x << "x" << m_workGroupSize.y << "x" << m_workGroupSize.z
               << "\tGridSize "
@@ -207,14 +209,30 @@ HsailAgentStatus AgentContext::BeginDebugging()
         return HSAIL_AGENT_STATUS_FAILURE;
     }
 
+    // Send the device info to the gdb.
+    if (AgentNotifyDevices(m_devices.deviceDescs) == HSAIL_AGENT_STATUS_SUCCESS)
+    {
+        AGENT_LOG("Sent the devices info to the GDB");
+    }
+    else
+    {
+        AGENT_ERROR("Failed to send the devices info to the GDB");
+    }
+
     HsailAgentStatus status = HSAIL_AGENT_STATUS_FAILURE;
     // Call the DBE and save the Context handle
     HwDbgStatus dbeStatus = HwDbgBeginDebugContext(m_HwDebugState, &m_DebugContextHandle);
-    assert(dbeStatus == HWDBG_STATUS_SUCCESS);
 
     if (dbeStatus != HWDBG_STATUS_SUCCESS)
     {
         AGENT_ERROR(GetDBEStatusString(dbeStatus));
+        // todo Add some more detail on which device the kernel was dispatched to
+        // Can be done when we add support for "info rocm device " since we will
+        // then have awareness of device names in the Agent
+        if (dbeStatus == HWDBG_STATUS_DEVICE_ERROR)
+        {
+            AGENT_OP("Kernel debugging is not supported on this device");
+        }
         return status;
     }
     else
@@ -913,6 +931,28 @@ bool AgentContext::CompareParentPID() const
     }
 
     return retCode;
+}
+
+/// Add a device info to the list of available devices.
+void AgentContext::AddDeviceInfo(uint64_t handle, RocmDeviceDesc& device)
+{
+    m_devices.handles.push_back(handle);
+    m_devices.deviceDescs.push_back(device);
+}
+
+/// Set active device
+void AgentContext::SetActiveDevice(uint64_t handle)
+{
+    assert(m_devices.handles.size() == m_devices.deviceDescs.size());
+    for (size_t  i = 0, N = m_devices.handles.size(); i < N; i++)
+    {
+        if (m_devices.handles[i] == handle)
+        {
+            m_devices.deviceDescs[i].m_active = true;
+            return;
+        }
+    }
+    AGENT_WARNING("Active device not found");
 }
 
 // We can check that the destructor should not be called before we end debugging

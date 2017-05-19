@@ -56,7 +56,8 @@ typedef enum
     HSAIL_NOTIFY_PREDISPATCH_STATE, // Information about the predispatch callback
     HSAIL_NOTIFY_AGENT_ERROR,       // Some error from the agent or the DBE - let gdb know
     HSAIL_NOTIFY_KILL_COMPLETE,     // Notification to let GDB know about kill finishing
-    HSAIL_NOTIFY_NEW_ACTIVE_WAVES   // Set the number of active waves
+    HSAIL_NOTIFY_NEW_ACTIVE_WAVES,  // Set the number of active waves
+    HSAIL_NOTIFY_DEVICES            // Notification to send the devices info to the GDB
 } HsailNotification;
 
 typedef enum
@@ -93,13 +94,31 @@ typedef enum
 } HsailAgentStatus;
 
 
+#define AGENT_MAX_DEVICE_NAME_LEN  64
+#define AGENT_MAX_DEVICES_NUM      16
+
 #define AGENT_MAX_SOURCE_LINE_LEN 256
 
 #define AGENT_MAX_FUNC_NAME_LEN 256
 
 #define HSAIL_MAX_REPORTABLE_BREAKPOINTS 64
 
-typedef struct _HsailConfigParam {
+// Descriptor for a GPU device
+typedef struct
+{
+    char      m_deviceName[AGENT_MAX_DEVICE_NAME_LEN];
+    uint64_t  m_chipID;
+    uint32_t  m_numCUs;        // num of compute units
+    uint32_t  m_maxEngineFreq;
+    uint32_t  m_maxMemoryFreq;
+    uint32_t  m_wavesPerCU;
+    uint32_t  m_numSIMDsPerCU;
+    uint32_t  m_numSEs;        // num of shader engines
+    bool      m_active;
+} RocmDeviceDesc;
+
+typedef struct _HsailConfigParam
+{
     // Different parameters needed by the agent
     HsailDebugConfigParam paramType;
     // Each param type's data will be saved in one of the below
@@ -292,6 +311,8 @@ typedef struct _HsailNotificationPayload
         struct
         {
             HsailPredispatchState m_predispatchState;
+            int m_HostDispatchTid;  // The thread ID that dispatched this kernel
+
         } PredispatchNotification;
 
         // HSAIL_NOTIFY_BEGIN_DEBUGGING
@@ -338,6 +359,13 @@ typedef struct _HsailNotificationPayload
             int m_numActiveWaves;
 
         } NewActiveWaveNotification;
+
+        // HSAIL_NOTIFY_DEVICES
+        struct
+        {
+            int               m_devicesNum;
+            RocmDeviceDesc    m_deviceDescriptors[AGENT_MAX_DEVICES_NUM];
+        } DevicesNotification;
     } payload;
 } HsailNotificationPayload;
 

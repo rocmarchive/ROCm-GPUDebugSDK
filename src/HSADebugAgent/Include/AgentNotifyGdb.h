@@ -10,6 +10,7 @@
 
 #include "AMDGPUDebug.h"
 #include "CommunicationControl.h"
+#include <vector>
 
 // Initialization notification, sends a SIGALRM to gdb.
 // this is different from the other notifications written to the FIFO
@@ -52,5 +53,9 @@ HsailAgentStatus AgentNotifyPredispatchState(const HsailPredispatchState ipState
 
 /// Let GDB know about the debug threads ID. We use the debug thread ID to single step accordingly
 HsailAgentStatus AgentNotifyDebugThreadID();
+
+/// Let GDB know about the available devices. It needs this info for the "info rocm devices" command.
+/// \param[in] devices    The list of device descriptors to be sent to gdb in the notification.
+HsailAgentStatus AgentNotifyDevices(const std::vector<RocmDeviceDesc>& devices);
 
 #endif // AGENTNOTIFY_H_

@@ -9,10 +9,15 @@
 #define DBGINFOUTILS_H_
 
 // Local:
-#include <DbgInfoDefinitions.h>
+#include "DbgInfoDefinitions.h"
 
 // STL:
 #include <string>
+
+// See we can compile on Windows
+#if defined(_WIN32) || defined(_WIN64)
+char* basename(char* inputParam);
+#endif
 
 /// The HSA Device default name:
 #define HSA_DEVICE_STRING "HSA"

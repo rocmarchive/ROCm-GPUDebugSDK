@@ -12,8 +12,8 @@
 #include <vector>
 
 /// Local:
-#include <DbgInfoIConsumer.h>
-#include <DbgInfoDefinitions.h>
+#include "DbgInfoIConsumer.h"
+#include "DbgInfoDefinitions.h"
 
 namespace HwDbg
 {

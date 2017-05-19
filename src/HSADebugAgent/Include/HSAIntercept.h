@@ -9,7 +9,6 @@
 #define HSA_INTERCEPT_H_
 
 #include <hsa_api_trace.h>
-#include "HSAAPITable1_0.h"
 
 #include "CommunicationControl.h"
 
@@ -18,7 +17,6 @@ extern "C" {
 #endif  // __cplusplus
 
 HsailAgentStatus InitHsaCoreAgentIntercept(HsaApiTable* table);
-HsailAgentStatus InitHsaCoreAgentIntercept1_0(ApiTable1_0* table);
 
 #ifdef __cplusplus
 }

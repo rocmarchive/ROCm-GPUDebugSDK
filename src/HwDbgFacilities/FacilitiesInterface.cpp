@@ -8,17 +8,20 @@
 // C / C++:
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
+#include <iostream>
 
 // Brig:
-#include <BrigSectionHeader.h>
+#include "BrigSectionHeader.h"
 
 // HwDbgFacilities:
-#include <DbgInfoUtils.h>
-#include <DbgInfoDwarfParser.h>
-#include <DbgInfoConsumerImpl.h>
-#include <DbgInfoCompoundConsumer.h>
-#include <DbgInfoLogging.h>
-#include <FacilitiesInterface.h>
+#include "DbgInfoUtils.h"
+#include "DbgInfoDwarfParser.h"
+#include "DbgInfoConsumerImpl.h"
+#include "DbgInfoCompoundConsumer.h"
+#include "DbgInfoLogging.h"
+#include "FacilitiesInterface.h"
+
 
 #define HWDBGFAC_INTERFACE_DUMMY_FILE_PATH "src1.hsail"
 
@@ -360,6 +363,11 @@ HwDbgInfo_debug hwdbginfo_init_with_single_level_binary(const void* bin, size_t 
         HWDBGFAC_INTERFACE_SET_ERR_AND_RETURN_NULL(err, HWDBGINFO_E_NOBINARY);
     }
 
+    char* loggingOption = getenv("HWDBG_DBGINFO_ENABLE_LOGGING");
+    if (loggingOption != nullptr)
+    {
+        hwdbginfo_enable_logging();
+    }
     // Create the binary object:
     KernelBinary olBin(bin, bin_size);
 
@@ -375,11 +383,11 @@ HwDbgInfo_debug hwdbginfo_init_with_single_level_binary(const void* bin, size_t 
     bool retVal = DbgInfoDwarfParser::InitializeWithBinary(olBin, dbg->ol_sc, dbg->ol_lm);
 
     // for each scope
-    for(int i=0; i < dbg->ol_sc.m_children.size(); i++)
+    for(size_t i=0; i < dbg->ol_sc.m_children.size(); i++)
     {
         DBGINFO_LOG( "===========Scope # " << i << "============\n");
-        // For each address within the scope
-        for (int k=0; k< dbg->ol_sc.m_children[i]->m_scopeAddressRanges.size(); k++)
+        // For each address range within the scope
+        for (size_t k=0; k< dbg->ol_sc.m_children[i]->m_scopeAddressRanges.size(); k++)
         {
             DBGINFO_LOG( "\t"
                       << std::hex
@@ -391,7 +399,7 @@ HwDbgInfo_debug hwdbginfo_init_with_single_level_binary(const void* bin, size_t 
         }
 
         // for all vars in that scope
-        for (int j=0;j< dbg->ol_sc.m_children[i]->m_scopeVars.size(); j++)
+        for (size_t j=0;j< dbg->ol_sc.m_children[i]->m_scopeVars.size(); j++)
         {
             if (dbg->ol_sc.m_children[i]->m_scopeVars[j]->m_varName.empty())
             {
@@ -434,6 +442,13 @@ HwDbgInfo_debug hwdbginfo_init_with_single_level_binary(const void* bin, size_t 
     // Set the default file name:
     std::vector<FileLocation> ol_fileLocs;
     bool rcHLLM = dbg->ol_lm.GetMappedLines(ol_fileLocs);
+
+    DBGINFO_LOG("Print all File names\n");
+    for (size_t i = 0 ; i< ol_fileLocs.size(); i++)
+      {
+        DBGINFO_LOG("Mapping  " << i << "Path: " << ol_fileLocs[i].fullPath() <<
+                               "Line " << ol_fileLocs[i].m_lineNum  <<  "\n");
+      }
 
     if (rcHLLM)
     {
@@ -750,7 +765,7 @@ HwDbgInfo_code_location hwdbginfo_make_code_location(const char* file_name, HwDb
 
     if (nullptr != file_name)
     {
-        strPath = file_name;
+        strPath.assign(file_name);
     }
 
     FileLocation* pLoc = new(std::nothrow) FileLocation(strPath, line_num);
@@ -934,6 +949,7 @@ HwDbgInfo_err hwdbginfo_nearest_mapped_line(HwDbgInfo_debug dbg, HwDbgInfo_code_
     bool wasEmptyPath = false;
 
     const char* pBasePath = pBaseLine->fullPath();
+    // Case 1: If no input file name given the in the input code location
     if (nullptr == pBasePath || '\0' == pBasePath[0])
     {
         wasEmptyPath = true;
@@ -942,6 +958,54 @@ HwDbgInfo_err hwdbginfo_nearest_mapped_line(HwDbgInfo_debug dbg, HwDbgInfo_code_
         if (!pDbg->m_firstMappedFileName.empty())
         {
             pBaseLine->setFullPath(pDbg->m_firstMappedFileName);
+        }
+    }
+    else
+    {
+        // Case 2: Some input file name given.
+        //
+        // Handle the case when a filename is provided while creating the code location.
+        // We need to look for a full path for the filename by comparing all the file names
+        // we can find the line table
+
+        std::vector<FileLocation> ol_fileLocs;
+
+        // Cast the generic base into the One level specific structure.
+        // A better design would be to add a GetMappedLines() to the consumer interface class
+        HwDbgInfo_FacInt_OneLevelDebug* ol_dbg  = (HwDbgInfo_FacInt_OneLevelDebug*)(pDbg);
+        assert(nullptr != ol_dbg);
+
+        bool rcHLLM = ol_dbg->ol_lm.GetMappedLines(ol_fileLocs);
+        assert( rcHLLM == true);
+        if (rcHLLM == true)
+        {
+            for (size_t i=0;i < ol_fileLocs.size() ; i++)
+            {
+                // skip null
+                if (ol_fileLocs[i].m_fullPath == nullptr)
+                {
+                    continue;
+                }
+
+                // Get just the filename from the DWARF full path
+                char* fileName  = basename(ol_fileLocs[i].m_fullPath);
+
+                // Compare input filename and the DWARF file name
+                if (fileName != NULL)
+                {
+                    // If the filename matches, we are good.
+                    // This can be improved later to handle relative paths
+                    if (strcmp(fileName, pBasePath) == 0)
+                    {
+                        pBaseLine->setFullPath(ol_fileLocs[i].m_fullPath);
+                        break;
+                    }
+                }
+            }
+        }
+        else
+        {
+            DBGINFO_LOG("Could not find any mapped lines");
         }
     }
 

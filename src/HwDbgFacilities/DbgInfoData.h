@@ -36,10 +36,10 @@
 #include <string.h> // ::memcpy()
 
 // Local:
-#include <DbgInfoDefinitions.h>
-#include <DbgInfoUtils.h>
-#include <DbgInfoLogging.h>
-#include <FacilitiesInterface.h>
+#include "DbgInfoDefinitions.h"
+#include "DbgInfoUtils.h"
+#include "DbgInfoLogging.h"
+#include "FacilitiesInterface.h"
 
 namespace HwDbg
 {

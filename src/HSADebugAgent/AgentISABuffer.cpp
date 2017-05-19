@@ -182,6 +182,10 @@ HsailAgentStatus  AgentISABuffer::DisassembleLLVMObjDump(const size_t size, cons
     // option1 wont exist
     const std::string LLVM_CMD_OPTION2 = "/opt/rocm/hcc-lc/compiler/bin/llvm-objdump";
 
+    // In ROCm 1.5 onwards, when we use CLANG TOT
+    const std::string LLVM_CMD_OPTION3 = "/opt/rocm/hcc/bin/llvm-objdump";
+
+
     std::string llvmCmdFileNameToUse("");
 
     const std::string llvmCmdOptions = "-disassemble -arch=amdgcn  -mcpu=fiji";
@@ -201,6 +205,10 @@ HsailAgentStatus  AgentISABuffer::DisassembleLLVMObjDump(const size_t size, cons
     else if (AgentIsFileExists(LLVM_CMD_OPTION2.c_str()))
     {
         llvmCmdFileNameToUse.append(LLVM_CMD_OPTION2);
+    }
+    else if (AgentIsFileExists(LLVM_CMD_OPTION3.c_str()))
+    {
+        llvmCmdFileNameToUse.append(LLVM_CMD_OPTION3);
     }
     else
     {

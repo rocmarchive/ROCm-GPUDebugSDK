@@ -66,7 +66,7 @@ bool HSAToolsRTModule::LoadModule(const std::string& moduleName)
     {
 
 #define MAKE_STRING(s) "hsa_"#s
-#define X(SYM) SYM = reinterpret_cast<hsa_##SYM##_t>(m_dynamicLibraryHelper.GetProcAddress(MAKE_STRING(SYM)));
+#define X(SYM) SYM = reinterpret_cast<hsa_##SYM##_fn_t>(m_dynamicLibraryHelper.GetProcAddress(MAKE_STRING(SYM)));
         HSA_TOOLS_INTERFACES_API_TABLE;
         HSA_TOOLS_DEBUGGER_API_TABLE;
         HSA_TOOLS_PROFILER_API_TABLE;

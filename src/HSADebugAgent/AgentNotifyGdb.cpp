@@ -64,6 +64,9 @@ static const std::string AgentGetGDBNotificationString(const HsailNotification n
         case  HSAIL_NOTIFY_NEW_ACTIVE_WAVES:
             return "HSAIL_NOTIFY_NEW_ACTIVE_WAVES";
 
+        case HSAIL_NOTIFY_DEVICES:
+            return "HSAIL_NOTIFY_DEVICES";
+
         // Should never happen
         default:
             return "[UNKNOWN_NOTIFICATION_TYPE]";
@@ -296,8 +299,11 @@ HsailAgentStatus AgentNotifyPredispatchState(const HsailPredispatchState ipState
     HsailNotificationPayload predispatchPayload;
     memset(&predispatchPayload, 0, sizeof(HsailNotificationPayload));
 
+    int sid = syscall(SYS_gettid);
+
     predispatchPayload.m_Notification = HSAIL_NOTIFY_PREDISPATCH_STATE;
     predispatchPayload.payload.PredispatchNotification.m_predispatchState = ipState;
+    predispatchPayload.payload.PredispatchNotification.m_HostDispatchTid = sid;
     HsailAgentStatus status =  PushGDBNotification(predispatchPayload);
 
     if (HSAIL_AGENT_STATUS_SUCCESS != status)
@@ -345,7 +351,7 @@ HsailAgentStatus AgentNotifyEndDebugging(const bool hasDispatchCompleted)
 
     if (HSAIL_AGENT_STATUS_SUCCESS != status)
     {
-        AgentErrorLog("Error in Pushing a new binary notification to GDB\n");
+        AgentErrorLog("Error in Pushing an EndDebugging notification to GDB\n");
         return status;
     }
 
@@ -368,6 +374,30 @@ HsailAgentStatus AgentNotifyDebugThreadID()
     if (HSAIL_AGENT_STATUS_SUCCESS != status)
     {
         AgentErrorLog("Error in Pushing a new debug thread notification to GDB\n");
+    }
+
+    return status;
+}
+
+HsailAgentStatus AgentNotifyDevices(const std::vector<RocmDeviceDesc>& devices)
+{
+    HsailNotificationPayload devicesPayload;
+    memset(&devicesPayload, 0, sizeof(HsailNotificationPayload));
+    devicesPayload.m_Notification = HSAIL_NOTIFY_DEVICES;
+
+    int  numDevices = devices.size();
+    devicesPayload.payload.DevicesNotification.m_devicesNum = numDevices;
+
+    for (int i = 0; i < numDevices; i++)
+    {
+        devicesPayload.payload.DevicesNotification.m_deviceDescriptors[i] = devices[i];
+    }
+
+    HsailAgentStatus status =  PushGDBNotification(devicesPayload);
+
+    if (HSAIL_AGENT_STATUS_SUCCESS != status)
+    {
+        AgentErrorLog("Error in Pushing a devices notification to GDB\n");
     }
 
     return status;

@@ -87,6 +87,12 @@ static HwDbgAgent::AgentContext* psAgentContext = nullptr;
 
 static HwDbgAgent::AgentConfiguration* psActiveAgentConfig = nullptr;
 
+// RT API functions
+static CoreApiTable* gs_pCoreApiTable = nullptr;
+
+// global flag to ensure initialization is done once
+static bool gs_bInit = false;
+
 static void InitAgentContext();
 
 // This signal handler is needed since we pass SIGUSR1 to the inferior
@@ -152,13 +158,100 @@ static void ClearAgentConfiguration()
     }
 }
 
-// global flag to ensure initialization is done once
-bool g_bInit = false;
+// Some of device info is not provided by the Runtime currently.
+// Disable dumping this data until this is fixed in the Runtime.
+#define  FULL_DEVICE_INFO   0
 
+/// Callback function for "hsa_iterate_agents" called by SetDeviceInfo().
+static hsa_status_t QueryDeviceCallback(hsa_agent_t agent, void* pData)
+{
+    int  status = HSA_STATUS_SUCCESS;
+    if (gs_pCoreApiTable == nullptr)
+    {
+        AGENT_ERROR("API table is null in query device callback");
+        return HSA_STATUS_ERROR;
+    }
+
+    RocmDeviceDesc  deviceDesc;
+    memset(&deviceDesc, 0, sizeof(deviceDesc));
+    char  nameBuf[2 * AGENT_MAX_DEVICE_NAME_LEN];
+    memset(nameBuf, 0, 2 * AGENT_MAX_DEVICE_NAME_LEN);
+
+    // Find out the device type and skip it if it's a CPU.
+    hsa_device_type_t  deviceType;
+    status = gs_pCoreApiTable->hsa_agent_get_info_fn(agent, HSA_AGENT_INFO_DEVICE, &deviceType);
+    if (status == HSA_STATUS_SUCCESS && deviceType == HSA_DEVICE_TYPE_CPU)
+    {
+        return HSA_STATUS_SUCCESS;
+    }
+
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent, HSA_AGENT_INFO_VENDOR_NAME, nameBuf);
+    // Insert a space between the vendor and product names.
+    size_t vendorNameLen = strnlen(nameBuf, AGENT_MAX_DEVICE_NAME_LEN);
+    strncpy(nameBuf + vendorNameLen, " ", 1);
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent, HSA_AGENT_INFO_NAME, nameBuf + vendorNameLen + 1);
+    memcpy(deviceDesc.m_deviceName, nameBuf, AGENT_MAX_DEVICE_NAME_LEN);
+
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent,
+                                                    static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_CHIP_ID),
+                                                    &deviceDesc.m_chipID);
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent,
+                                                    static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT),
+                                                    &deviceDesc.m_numCUs);
+#if FULL_DEVICE_INFO
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent,
+                                                    static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_NUM_SHADER_ENGINES),
+                                                    &deviceDesc.m_numSEs);
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent,
+                                                    static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_NUM_SIMDS_PER_CU),
+                                                    &deviceDesc.m_numSIMDsPerCU);
+#endif
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent,
+                                                    static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_MAX_WAVES_PER_CU),
+                                                    &deviceDesc.m_wavesPerCU);
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent,
+                                                    static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_MAX_CLOCK_FREQUENCY),
+                                                    &deviceDesc.m_maxEngineFreq);
+    status |= gs_pCoreApiTable->hsa_agent_get_info_fn(agent,
+                                                    static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY),
+                                                    &deviceDesc.m_maxMemoryFreq);
+    if (status != HSA_STATUS_SUCCESS)
+    {
+        AGENT_WARNING("Failed to get some of the device info");
+    }
+
+    psAgentContext->AddDeviceInfo(agent.handle, deviceDesc);
+
+    return HSA_STATUS_SUCCESS;
+}
+
+/// Find out the list of available devices in the system and pass it to the Context.
+static bool SetDeviceInfo()
+{
+    hsa_status_t  status = HSA_STATUS_SUCCESS;
+
+    if (gs_pCoreApiTable == nullptr)
+    {
+        AGENT_WARNING("Old Runtime version; not sending device info to GDB.");
+    }
+    else
+    {
+        // Call the "hsa_iterate_agents" RT API function to get the information about available agents (devices).
+        // The RT will call "QueryDeviceCallback" function for each agent.
+        status = gs_pCoreApiTable->hsa_iterate_agents_fn(QueryDeviceCallback, nullptr);
+        if (status != HSA_STATUS_SUCCESS)
+        {
+            AGENT_ERROR("Failed querying the device information.");
+            return false;
+        }
+    }
+
+    return true;
+}
 
 static void InitHsaAgent()
 {
-    if (!g_bInit)
+    if (!gs_bInit)
     {
 
         AGENT_LOG("===== HSADebugAgent activated =====");
@@ -198,7 +291,7 @@ static void InitHsaAgent()
 
         // Now that GDB has started, allocate the Agent Context object
         InitAgentContext();
-        g_bInit = true;
+        gs_bInit = true;
 
     }
     else
@@ -211,7 +304,7 @@ static void InitHsaAgent()
 
 static void InitAgentContext()
 {
-    if (!g_bInit)
+    if (!gs_bInit)
     {
         AGENT_LOG("===== Init AgentContext =====");
 
@@ -226,6 +319,12 @@ static void InitAgentContext()
         {
             AGENT_ERROR("g_pAgentContext returned an error.");
             return;
+        }
+
+        // Set the device info
+        if (SetDeviceInfo() == false)
+        {
+            AGENT_ERROR("Could not get devices info");
         }
     }
 }
@@ -265,7 +364,7 @@ static void DeleteHsaAgentContext()
         }
 
         g_bCleanUp = true;
-        g_bInit = false;
+        gs_bInit = false;
     }
 }
 
@@ -427,10 +526,12 @@ extern "C" bool OnLoad(void* pTable,
 
     if (0 == runtimeVersion)
     {
-        status = InitHsaCoreAgentIntercept1_0(reinterpret_cast<ApiTable1_0*>(pTable));
+        AGENT_ERROR("Unsupported runtime version");
+        status = HSAIL_AGENT_STATUS_FAILURE;
     }
     else
     {
+        gs_pCoreApiTable = (reinterpret_cast<HsaApiTable*>(pTable))->core_;
         status = InitHsaCoreAgentIntercept(reinterpret_cast<HsaApiTable*>(pTable));
     }
 

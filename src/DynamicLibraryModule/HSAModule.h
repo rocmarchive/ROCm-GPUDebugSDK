@@ -42,8 +42,28 @@ public:
     void UnloadModule();
 
     /// Indicates whether the HSA runtime module has been loaded and all the expected entry points are valid
-    /// \returns enumeration value to answer query.
+    /// \return enumeration value to answer query.
     bool IsModuleLoaded() { return m_isModuleLoaded; }
+
+    /// Indicates whether the HSA finalizer runtime API table entry point are loaded or not
+    /// \return true if finalizer extension API table entry point are valid otherwise false
+    bool IsExtFinalizeAPITableLoaded() { return m_finalizeExtTableLoaded; }
+
+    /// Indicates whether the HSA image api extension api table entry point are loaded or not
+    /// \return true if extension api table entry point are valid otherwise false
+    bool IsExtImageAPITableLoaded() { return m_imageExtTableLoaded; }
+
+    /// Indicates whether the AMD extension API table entry point are loaded or not
+    /// \return true if AMD extension api table entry point are valid otherwise false
+    bool IsExtAMDAPITableLoaded() { return m_amdExtTableLoaded; }
+
+    /// Indicates whether the AMD vendor api table functions entry point are loaded or not
+    /// \return true if api table entry point are valid otherwise false
+    bool IsVenAMDLoaderAPITableLoaded() { return m_amdVenLoaderTableLoaded; }
+
+    /// Indicates whether the noninterceptable API table entry point are loaded or not
+    /// return true if api table entry point are valid otherwise false
+    bool IsNonInterceptableRuntimeAPITableLoaded() { return m_nonInterceptableTableLoaded; }
 
 
 #define X(SYM) decltype(::hsa_##SYM)* SYM;
@@ -59,8 +79,13 @@ private:
     /// Initialize the internal data
     void Initialize();
 
-    bool                 m_isModuleLoaded;       ///< Flag indicating whether the HSA runtime module has been loaded and all the expected entry points are valid
-    DynamicLibraryModule m_dynamicLibraryHelper; ///< Helper to load/initialize the runtime entry points
+    bool                 m_isModuleLoaded;                  ///< Flag indicating whether the HSA runtime module has been loaded and all the expected entry points are valid
+    bool                 m_finalizeExtTableLoaded;          ///< Flag indicating whether the HSA finalizer extension API table entry points are valid or not
+    bool                 m_imageExtTableLoaded;             ///< Flag indicating whether the HSA image extension API table entry points are loaded or not
+    bool                 m_amdExtTableLoaded;               ///< Flag indicating whether the HSA AMD extension table entry points are loaded or not
+    bool                 m_amdVenLoaderTableLoaded;         ///< Flag indicating whether the AMD vendor extension table entry points are loaded or not
+    bool                 m_nonInterceptableTableLoaded;     ///< Flag indicating whether the non-interceptable table API entry points are loaded or not
+    DynamicLibraryModule m_dynamicLibraryHelper;            ///< Helper to load/initialize the runtime entry points
 };
 
 #endif

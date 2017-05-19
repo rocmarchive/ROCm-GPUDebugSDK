@@ -12,17 +12,19 @@
 
 namespace HwDbgAgent
 {
+
+/// Class to manage the presently loaded segments for a particular dispatch
+/// and share the information with gdb via shared mem
 class AgentSegmentLoader
 {
 public:
 
+    /// Initialize with the dispatch packet
     AgentSegmentLoader(hsa_kernel_dispatch_packet_t* pAqlPacket);
 
     ~AgentSegmentLoader();
 
-    const HwDbgLoaderSegmentDescriptor* GetLoadedSegmentBuffer() const;
-    const size_t GetNumLoadedSegments() const;
-
+    /// Query the runtime for the latest loaded segments and notify gdb
     HsailAgentStatus UpdateLoadedSegments();
 
 private:

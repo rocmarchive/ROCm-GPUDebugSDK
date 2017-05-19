@@ -1,8 +1,11 @@
+*.orig
 *.o
+*.os
 *~
 *.d
 .project
 .cproject
-.settings
 libAMDHSADebugAgent-x64.so
 libAMDHSADebugAgent-x64-d.so
+libAMDHwDbgFacilities-x64.so
+libAMDHwDbgFacilities-x64-d.so

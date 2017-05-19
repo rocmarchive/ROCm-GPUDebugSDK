@@ -8,7 +8,7 @@
 #ifndef DBGINFOCOMPOUNDCONSUMER_H_
 #define DBGINFOCOMPOUNDCONSUMER_H_
 
-#include <DbgInfoIConsumer.h>
+#include "DbgInfoIConsumer.h"
 
 // STL:
 #include <string>

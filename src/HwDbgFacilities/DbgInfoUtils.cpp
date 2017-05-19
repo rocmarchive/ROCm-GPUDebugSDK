@@ -6,15 +6,31 @@
 /// \brief Description: General functions
 //==============================================================================
 /// Local:
-#include <DbgInfoUtils.h>
+#include "DbgInfoUtils.h"
 
 /// STL:
+#include <iostream>
 #include <string>
 #include <memory>
 #include <stdarg.h>
-#include <string.h>
+#include <cstring>
+#include <string>
 
 #include <cstdlib>
+
+// See we can compile on Windows
+#if defined(_WIN32) || defined(_WIN64)
+char* basename(char* inputParam)
+{
+    std::cout << "Dbginfo tests not supported on Windows";
+    if (inputParam != nullptr)
+    {
+        std::cout << "Input " << inputParam;
+    }
+    return inputParam;
+}
+#endif
+
 
 using namespace HwDbg;
 

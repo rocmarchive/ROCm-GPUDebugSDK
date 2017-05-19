@@ -46,7 +46,7 @@ public:
     bool IsModuleLoaded() { return m_isModuleLoaded; }
 
 
-#define X(SYM) hsa_##SYM##_t SYM;
+#define X(SYM) hsa_##SYM##_fn_t SYM;
     HSA_TOOLS_INTERFACES_API_TABLE;
     HSA_TOOLS_DEBUGGER_API_TABLE;
     HSA_TOOLS_PROFILER_API_TABLE;

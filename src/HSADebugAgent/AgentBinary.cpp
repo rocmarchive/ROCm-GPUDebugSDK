@@ -91,8 +91,10 @@ HsailAgentStatus AgentBinary::DemangleKernelName(const std::string& ipKernelName
     const std::string MANGLED_STRING_FILE="/tmp/mangled_kernel";
     const std::string DEMANGLED_STRING_FILE="/tmp/demangled_kernel";
 
+
     if (ipKernelName.empty())
     {
+        AGENT_ERROR("Input kernel name to Demangle function is empty");
         return status;
     }
 
@@ -113,9 +115,10 @@ HsailAgentStatus AgentBinary::DemangleKernelName(const std::string& ipKernelName
         return status;
     }
 
-    std::ofstream out(MANGLED_STRING_FILE);
+    std::ofstream out(MANGLED_STRING_FILE, std::ofstream::out);
     if (!out.is_open())
     {
+        AGENT_LOG("Mangled kernel file " << MANGLED_STRING_FILE << "could not be opened");
         return status;
     }
     else
@@ -145,13 +148,15 @@ HsailAgentStatus AgentBinary::DemangleKernelName(const std::string& ipKernelName
         AGENT_LOG("DemangleKernelName: Return code: " << retCode << "errno: " << strerror(err_no));
 
 
-        std::ifstream inputStream(DEMANGLED_STRING_FILE);
+        std::ifstream inputStream(DEMANGLED_STRING_FILE, std::ifstream::in);
         if (inputStream.is_open())
         {
             getline(inputStream, demangledNameOut);
             status = HSAIL_AGENT_STATUS_SUCCESS;
 
             AGENT_LOG("Demangled kernel name: " << demangledNameOut);
+
+            inputStream.close();
 
             // Delete tmp files
             AgentDeleteFile(MANGLED_STRING_FILE.c_str());
@@ -221,6 +226,7 @@ HsailAgentStatus AgentBinary::PopulateBinaryFromDBE(HwDbgContextHandle dbgContex
     else
     {
         std::string mangledKernelName(pMangledKernelName);
+        AGENT_LOG("Mangled Kernel name " << mangledKernelName);
         status =  DemangleKernelName(mangledKernelName, demangledKernelName);
     }
 

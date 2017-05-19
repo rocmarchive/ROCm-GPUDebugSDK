@@ -21,16 +21,17 @@ typedef struct _Dwarf_Die* Dwarf_Die;
 #include <dwarf.h>
 
 /// STL:
+#include <cstring>
 #include <string>
 #include <vector>
 
 /// Local:
-#include <DbgInfoLines.h>
-#include <DbgInfoData.h>
-#include <DbgInfoDefinitions.h>
+#include "DbgInfoLines.h"
+#include "DbgInfoData.h"
+#include "DbgInfoDefinitions.h"
 /// \note: this is temporarily here due to \a DwarfLocationResolver which will be placed in a different class
-#include <DbgInfoConsumerImpl.h>
-#include <FacilitiesInterface.h>
+#include "DbgInfoConsumerImpl.h"
+#include "FacilitiesInterface.h"
 
 
 

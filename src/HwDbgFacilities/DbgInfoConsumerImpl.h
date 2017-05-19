@@ -12,10 +12,10 @@
 #include <iterator>
 
 // Local:
-#include <DbgInfoIConsumer.h>
-#include <DbgInfoLines.h>
-#include <DbgInfoData.h>
-#include <DbgInfoUtils.h>
+#include "DbgInfoIConsumer.h"
+#include "DbgInfoLines.h"
+#include "DbgInfoData.h"
+#include "DbgInfoUtils.h"
 
 namespace HwDbg
 {

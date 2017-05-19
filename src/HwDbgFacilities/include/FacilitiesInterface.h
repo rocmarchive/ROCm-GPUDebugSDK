@@ -119,8 +119,10 @@ typedef unsigned int HwDbgInfo_locreg;
 #define HWDBGINFO_VINDD_AMD_GPU_PRIVATE_POINTER 4
 /* Pointer to const global memory   */
 #define HWDBGINFO_VINDD_AMD_GPU_CONSTANT_POINTER 5
+/* Flat pointer */
+#define HWDBGINFO_VINDD_AMD_GPU_FLAT_POINTER 6
 /* Undefined / uninitialized        */
-#define HWDBGINFO_VINDD_AMD_GPU_UNKNOWN_POINTER 6
+#define HWDBGINFO_VINDD_AMD_GPU_UNKNOWN_POINTER 7
 
 /************************************/
 /* Variable location register type: */

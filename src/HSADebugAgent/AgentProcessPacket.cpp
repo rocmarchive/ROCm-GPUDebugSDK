@@ -398,7 +398,7 @@ void* GetVarValue(unsigned int reg_type, size_t var_size, unsigned int reg_num, 
 
         // Since we applied the piece offset here (to get the correct value), we can reset the piece offset we will use to parse to 0:
         piece_offset = 0;
-
+	AGENT_LOG("Access Memory Region " << isa_memory_region);
         switch (isa_memory_region)
         {
 
@@ -465,6 +465,11 @@ void* GetVarValue(unsigned int reg_type, size_t var_size, unsigned int reg_num, 
 
             }
             break;
+
+            default:
+            {
+                AGENT_ERROR("Unsupported Memory Region" << isa_memory_region);
+            }
         }
     }
     else

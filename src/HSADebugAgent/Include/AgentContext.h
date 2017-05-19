@@ -54,6 +54,13 @@ private:
 
     } HsailAgentState;
 
+    /// All available GPU devices in the system.
+    struct
+    {
+        std::vector<uint64_t>        handles;
+        std::vector<RocmDeviceDesc>  deviceDescs;
+    } m_devices;
+
     std::vector<AgentBinary*> m_pKernelBinaries;
 
     /// Enum that describes the state of the agent
@@ -194,6 +201,15 @@ public:
 
     /// Compare parent PID saved at object creation with present parent PID
     bool CompareParentPID() const;
+
+    /// Add a device info to the list of available devices
+    /// \param[in] handle    New device handle to be added to the list of handles.
+    /// \param[in] device    New device descriptor to be added to the list of descriptors.
+    void AddDeviceInfo(uint64_t handle, RocmDeviceDesc& device);
+
+    /// Set active device
+    /// \param[in] handle    The devide handle corresponding to the currently active device.
+    void SetActiveDevice(uint64_t handle);
 };
 
 } // End Namespace HwDbgAgent

@@ -14,9 +14,9 @@
 #include <map>
 
 // Local:
-#include <DbgInfoData.h>
-#include <DbgInfoLines.h>
-#include <DbgInfoDefinitions.h>
+#include "DbgInfoData.h"
+#include "DbgInfoLines.h"
+#include "DbgInfoDefinitions.h"
 
 namespace HwDbg
 {
