@@ -1,4 +1,8 @@
-# ROCm-GPUDebugSDK
+# ROCm-GPUDebugSDK - Deprecated Project
+## This ROCm Debugger is a Deprecated project.
+As of 2018, this is a deprecated software project. The ROCm software team is working on a new GDB-based debugger that works with the ROCr Debug Agent to support debugging GPU kernels.
+
+# Overview
 The ROCm-GPUDebugSDK repository provides the components required to build a GPU kernel debugger for Radeon Open Compute platforms (ROCm).
 The ROCm GPU Debug SDK components are used by ROCm-GDB and CodeXL debugger to support debugging GPU kernels on ROCm.
 
